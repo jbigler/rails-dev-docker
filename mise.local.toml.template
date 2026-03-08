@@ -1,11 +1,11 @@
 [env]
 WORKTREE = "{{ exec(command='git rev-parse --show-toplevel') | basename }}"
-COMPOSE_PROJECT_NAME = "filial-$WORKTREE"
+COMPOSE_PROJECT_NAME = "filial-{{ env.WORKTREE }}"
 COMPOSE_FILE = "{% set dev = '.dev/compose.yml' %}{{config_root}}/../docker-config/compose.yml{% if dev is exists %}:{{config_root}}/.dev/compose.yml{% endif %}"
 RUBY_DEBUG_LOCAL_FS_MAP = "/app/:{{ cwd }}"
 RUBY_VERSION = "{{ read_file(path='.ruby-version') | trim }}"
 NODE_VERSION = "{{ read_file(path='.nvmrc') | trim }}"
-SOCKET_DIR = "/tmp/sock-${COMPOSE_PROJECT_NAME}"
+SOCKET_DIR = "/tmp/sock-{{ env.COMPOSE_PROJECT_NAME }}"
 RUBY_DEBUG_SOCK_PATH= "{{config_root}}/tmp/sockets/ruby-debug.sock"
 APP_PORT = "{{APP_PORT}}"
 NVIM_PORT = "{{NVIM_PORT}}"
