@@ -160,7 +160,18 @@ RUN wget -q -O /usr/local/bin/lazygit https://github.com/jesseduffield/lazygit/r
 
 RUN luarocks install dkjson
 
+# Set up npm global prefix in user home
+RUN mkdir -p /home/${APP_USER}/.npm-global && \
+  chown -R ${APP_USER}:${APP_GROUP} /home/${APP_USER}/.npm-global && \
+  su - ${APP_USER} -c "npm config set prefix '/home/${APP_USER}/.npm-global'"
+
+
+ENV PATH="/home/${APP_USER}/.npm-global/bin:${PATH}"
+ENV NPM_CONFIG_PREFIX="/home/${APP_USER}/.npm-global"
+
 USER $APP_USER
+
+RUN npm install -g mcp-hub@latest
 
 EXPOSE 7777
 CMD ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
