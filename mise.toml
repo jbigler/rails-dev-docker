@@ -10,7 +10,7 @@ alias = "v"
 
 [tasks.test]
 description = "Start the Retest runner."
-run = "docker compose run -e DISABLE_COVERAGE=true --rm -it app retest --rails"
+run = "docker compose run -e DISABLE_COVERAGE=true --rm -it app sh -c 'gem list -i retest > /dev/null 2>&1 || gem install retest && retest --rails'"
 alias = "t"
 
 [tasks.rails]
