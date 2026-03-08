@@ -1,0 +1,174 @@
+services:
+  app:
+    build:
+      target: rails
+      args:
+        APP_USER_UID: ${UID:-1000}
+        APP_GROUP_GID: ${GID:-1000}
+        RUBY_VERSION: ${RUBY_VERSION}
+        NODE_VERSION: ${NODE_VERSION}
+    stdin_open: true
+    env_file: .env
+    environment:
+      RUSTFS_ENDPOINT: http://rustfs:${RUSTFS_API_PORT:-9000}
+    deploy:
+      resources:
+        limits:
+          cpus: "10"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+    networks:
+      - dev
+    ports:
+      - "0.0.0.0:${APP_PORT:-3000}:3000"
+      - "0.0.0.0:${RUBY_DEBUG_PORT:-38698}:38698"
+    volumes:
+      - ../${WORKTREE}:/app
+      - ../docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
+      - ../docker-config/home:/home/appuser
+      - shared_gems:/usr/local/bundle
+      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
+      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
+    entrypoint: ["entrypoint-app.sh"]
+    command: ["bin/dev"]
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
+    networks:
+      - dev
+    command: >
+      redis-server
+      --unixsocket /data/socket/redis.sock
+      --unixsocketperm 777
+      --port 0
+      --loglevel warning
+      --save ''
+      --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-s", "/data/socket/redis.sock", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db:
+    image: postgres:16
+    env_file: .env
+    environment:
+      POSTGRES_PASSWORD: ${PGPASSWORD:-password}
+    networks:
+      - dev
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
+    command: >
+      postgres
+      -c shared_preload_libraries='pg_stat_statements'
+      -c pg_stat_statements.track='all'
+      -c max_connections=200
+      -c max_locks_per_transaction=256
+      -c shared_buffers=1GB
+      -c temp_buffers=128MB
+      -c work_mem=64MB
+      -c maintenance_work_mem=256MB
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c max_wal_senders=0
+      -c wal_level=minimal
+      -c wal_compression=off
+      -c checkpoint_timeout=1h
+      -c max_wal_size=4GB
+      -c checkpoint_completion_target=0.9
+      -c autovacuum=off
+      -c random_page_cost=1.0
+      -c seq_page_cost=0.1
+      -c log_statement=none
+      -c log_checkpoints=off
+      -c log_autovacuum_min_duration=-1
+      -c log_temp_files=-1
+      -c max_parallel_workers_per_gather=4
+      -c parallel_setup_cost=0
+      -c parallel_tuple_cost=0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nvim:
+    build:
+      target: nvim
+      args:
+        APP_USER_UID: ${UID:-1000}
+        APP_GROUP_GID: ${GID:-1000}
+        RUBY_VERSION: ${RUBY_VERSION}
+        NODE_VERSION: ${NODE_VERSION}
+    volumes:
+      - ../docker-config/home:/home/appuser
+      - ../${WORKTREE}:/app
+      - shared_gems:/usr/local/bundle
+      - ${SSH_PATH}:/home/appuser/.ssh:ro
+    tty: true
+    stdin_open: true
+    env_file: .env
+    networks:
+      - dev
+    ports:
+      - "0.0.0.0:${NVIM_PORT:-7777}:7777"
+    entrypoint: ["entrypoint-nvim.sh"]
+    command: ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    shm_size: "1gb"
+    ipc: host
+    init: true
+    # ports:
+    #   - "${PLAYWRIGHT_PORT:-8888}:8888"
+    networks:
+      - dev
+    command: ["npx", "-y", "playwright@1.58.2", "run-server", "--port", "8888"]
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.83
+    environment:
+      - RUSTFS_VOLUMES=/data/rustfs{0..3} # Define 4 storage volumes
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ADDRESS=0.0.0.0:${RUSTFS_API_PORT:-9000}
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:${RUSTFS_UI_PORT:-9001}
+    ports:
+      - "${RUSTFS_API_PORT:-9000}:${RUSTFS_API_PORT:-9000}"
+      - "${RUSTFS_UI_PORT:-9001}:${RUSTFS_UI_PORT:-9001}"
+    volumes:
+      - rustfs_data:/data
+    networks:
+      - dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${RUSTFS_API_PORT}/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  home:
+  db_data:
+  rustfs_data:
+  shared_gems:
+    external: true
+    name: ${GEM_VOLUME:-shared_gems}
+
+networks:
+  dev:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400 # Fix for access when wireguard VPN is on host

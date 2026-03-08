@@ -1,0 +1,54 @@
+[env]
+UID = "{{exec(command='id -u')}}"
+GID = "{{exec(command='id -g')}}"
+
+[tasks.nvim]
+description = "Connect to Neovim in the container."
+# run = "docker compose run --rm -it nvim nvim" 
+run = "nvim --remote-ui --server localhost:${NVIM_PORT}"
+alias = "v"
+
+[tasks.test]
+description = "Start the Retest runner."
+run = "docker compose run -e DISABLE_COVERAGE=true --rm -it app retest --rails"
+alias = "t"
+
+[tasks.rails]
+description = "Enter the running Rails container."
+run = "docker compose exec app /bin/zsh"
+
+[tasks.rails_tests]
+description = "Run the Rails unit tests."
+run = "docker compose run --rm app bin/rails test"
+alias = "rt"
+
+[tasks.rails_sytem_tests]
+description = "Run the Rails system tests."
+run = "docker compose run --rm app bin/rails test:system"
+alias = "rst"
+
+[tasks.console]
+description = "Enter the Rails console."
+run = "docker compose run -e DISABLE_LOGCRAFT=true --rm -it app bin/rails console"
+alias = "c"
+
+[tasks.up]
+description = "Start the application."
+run = "docker compose up -d"
+alias = "u"
+
+[tasks.ci]
+description = "Run the CI linting and tests."
+run = "docker compose run app bundle exec rake ci:build:commit"
+
+[tasks.wt]
+description = "Create a worktree: mise run wt <branch|PR#>"
+run = "scripts/create-worktree.sh {{arg(name=\"branch\")}}"
+
+[tasks."wt:ls"]
+description = "List all worktrees"
+run = "scripts/list-worktrees.sh"
+
+[tasks."wt:rm"]
+description = "Remove a worktree: mise run wt:rm <branch|dir-name>"
+run = "scripts/remove-worktree.sh {{arg(name=\"branch\")}}"
