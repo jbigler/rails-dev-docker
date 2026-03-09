@@ -115,6 +115,7 @@ services:
       - ../${WORKTREE}:/app
       - shared_gems:/usr/local/bundle
       - ${SSH_PATH}:/home/appuser/.ssh:ro
+      - ../docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
     tty: true
     stdin_open: true
     env_file: .env

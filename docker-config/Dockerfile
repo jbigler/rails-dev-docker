@@ -141,7 +141,6 @@ FROM base as nvim
 USER root
 
 COPY --from=build-nvim /usr/local /usr/local/
-COPY entrypoint-nvim.sh /usr/local/bin/entrypoint-nvim.sh
 
 RUN (type -p wget >/dev/null || ( apt update && apt-get install wget -y)) \
   && mkdir -p -m 755 /etc/apt/keyrings \

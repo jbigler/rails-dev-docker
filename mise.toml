@@ -5,7 +5,7 @@ GID = "{{exec(command='id -g')}}"
 [tasks.nvim]
 description = "Connect to Neovim in the container."
 # run = "docker compose run --rm -it nvim nvim" 
-run = "nvim --remote-ui --server localhost:${NVIM_PORT}"
+run = "nvim --remote-ui --server localhost:{{ env.NVIM_PORT }}"
 alias = "v"
 
 [tasks.test]
