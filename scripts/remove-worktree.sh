@@ -67,5 +67,4 @@ echo "✓ Removed worktree: ${worktree_dir}"
 if [ -d "$master_dir" ]; then
   echo "Changing to master directory..."
   cd "$master_dir"
-  exec "$SHELL"
 fi

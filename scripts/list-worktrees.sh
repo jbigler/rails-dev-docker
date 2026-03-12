@@ -9,4 +9,7 @@ if [ -z "$git_dir" ]; then
   exit 1
 fi
 
-git -C "$git_dir" worktree list
+git -C "$git_dir" worktree list --porcelain \
+  | grep "^worktree " \
+  | sed "s|^worktree .*/||" \
+  | grep -vE "^(main|master)$"

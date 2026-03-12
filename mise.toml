@@ -57,6 +57,7 @@ run = "scripts/create-worktree.sh {{arg(name=\"branch\")}}"
 description = "List all worktrees"
 run = "scripts/list-worktrees.sh"
 
-[tasks."wt:rm"]
-description = "Remove a worktree: mise run wt:rm <branch|dir-name>"
-run = "scripts/remove-worktree.sh {{arg(name=\"branch\")}}"
+# [tasks."wt:rm"]
+# description = "Remove a worktree: mise run wt:rm <branch|dir-name>"
+# run = "scripts/remove-worktree.sh $1"                                                          # Define the CLI specification using the Usage DSL string
+# usage = "arg <worktree> help=\"The git worktree to remove\" run=\"scripts/list-worktrees.sh\""
