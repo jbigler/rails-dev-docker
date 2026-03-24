@@ -116,6 +116,8 @@ services:
       - shared_gems:/usr/local/bundle
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ../docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
+      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
+      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
     tty: true
     stdin_open: true
     env_file: .env
@@ -160,10 +162,58 @@ services:
       retries: 5
       start_period: 15s
 
+  claude:
+    build:
+      target: claude
+      args:
+        APP_USER_UID: ${UID:-1000}
+        APP_GROUP_GID: ${GID:-1000}
+        RUBY_VERSION: ${RUBY_VERSION}
+        NODE_VERSION: ${NODE_VERSION}
+        CLAUDE_CODE_VERSION: "latest"
+        GIT_DELTA_VERSION: "0.18.2"
+        ZSH_IN_DOCKER_VERSION: "1.2.0"
+    volumes:
+      - claude_config:/home/appuser/.claude
+      - claude_bashhistory:/commandhistory
+      - ../${WORKTREE}:/app
+      - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
+      - shared_gems:/usr/local/bundle
+      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
+      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
+      - ${SSH_PATH}:/home/appuser/.ssh:ro
+      - ${SSH_AUTH_SOCK}:/tmp/ssh-agent.sock:ro
+      - ../docker-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro
+      - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
+    tty: true
+    stdin_open: true
+    env_file: .env
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      CLAUDE_CONFIG_DIR: "/home/appuser/.claude"
+      POWERLEVEL9K_DISABLE_GITSTATUS: "true"
+      SSH_AUTH_SOCK: /tmp/ssh-agent.sock
+    profiles: ["do_not_start"]
+    networks:
+      - dev
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    entrypoint: ["entrypoint-claude.sh"]
+    command:
+      [
+        "/home/appuser/.npm-global/bin/claude",
+        "--allow-dangerously-skip-permissions",
+      ]
+
 volumes:
   home:
   db_data:
   rustfs_data:
+  claude_config:
+    external: true
+  claude_bashhistory:
+    external: true
   shared_gems:
     external: true
     name: ${GEM_VOLUME:-shared_gems}

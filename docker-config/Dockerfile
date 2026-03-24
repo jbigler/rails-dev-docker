@@ -24,15 +24,6 @@ RUN make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX=/usr/local/ && \
   make install && \
   strip /usr/local/bin/nvim
 
-# RUN git clone --depth 1 https://github.com/neovim/neovim.git /tmp/neovim 
-#
-# WORKDIR /tmp/neovim
-#
-# RUN git fetch --all --tags -f && \
-#   git checkout ${TARGET} && \
-#   make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX=/usr/local/ && \
-#   make install && \
-#   strip /usr/local/bin/nvim
 
 # ------------------------------------------------------------------------------
 # Node alias 
@@ -115,8 +106,19 @@ RUN addgroup --gid "$APP_GROUP_GID" "$APP_GROUP" \
   && chmod -R g+w "$BUNDLE_APP_CONFIG" \
   && chown -R "$APP_USER":"$APP_GROUP" "$APP_PATH"
 
+# Set up npm global prefix in user home
+RUN mkdir -p /home/${APP_USER}/.npm-global && \
+  chown -R ${APP_USER}:${APP_GROUP} /home/${APP_USER}/.npm-global && \
+  su - ${APP_USER} -c "npm config set prefix '/home/${APP_USER}/.npm-global'"
+
+
+ENV PATH="/home/${APP_USER}/.npm-global/bin:${PATH}"
+ENV NPM_CONFIG_PREFIX="/home/${APP_USER}/.npm-global"
 ENV PATH="${PATH}:/app/node_modules/.bin"
+
 WORKDIR $APP_PATH
+
+ENV SHELL=/bin/zsh
 
 USER $APP_USER
 
@@ -124,7 +126,9 @@ RUN bundle install
 
 SHELL ["/bin/zsh", "-c"]
 
+# ------------------------------------------------------------------------------
 # Rails image
+# ------------------------------------------------------------------------------
 FROM base as rails
 
 ENV RAILS_LOG_TO_STDOUT="1"
@@ -159,18 +163,88 @@ RUN wget -q -O /usr/local/bin/lazygit https://github.com/jesseduffield/lazygit/r
 
 RUN luarocks install dkjson
 
-# Set up npm global prefix in user home
-RUN mkdir -p /home/${APP_USER}/.npm-global && \
-  chown -R ${APP_USER}:${APP_GROUP} /home/${APP_USER}/.npm-global && \
-  su - ${APP_USER} -c "npm config set prefix '/home/${APP_USER}/.npm-global'"
-
-
-ENV PATH="/home/${APP_USER}/.npm-global/bin:${PATH}"
-ENV NPM_CONFIG_PREFIX="/home/${APP_USER}/.npm-global"
-
 USER $APP_USER
 
 RUN npm install -g mcp-hub@latest
 
 EXPOSE 7777
 CMD ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
+
+
+# ------------------------------------------------------------------------------
+# Claude image
+# ------------------------------------------------------------------------------
+
+FROM base as claude
+
+ARG CLAUDE_CODE_VERSION=latest
+
+USER root
+
+RUN apt-get update -qq && \
+  apt-get install -y \
+  less \
+  procps \
+  sudo \
+  gosu \
+  fzf \
+  man-db \
+  unzip \
+  gnupg2 \
+  iptables \
+  ipset \
+  iproute2 \
+  dnsutils \
+  aggregate \
+  jq \
+  nano \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN (type -p wget >/dev/null || ( apt update && apt-get install wget -y)) \
+  && mkdir -p -m 755 /etc/apt/keyrings \
+  && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+  && apt update \
+  && apt install gh -y
+
+# Persist bash history.
+RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+  && mkdir /commandhistory \
+  && touch /commandhistory/.bash_history \
+  && chown -R $APP_USER /commandhistory
+
+
+ARG GIT_DELTA_VERSION=0.18.2
+RUN ARCH=$(dpkg --print-architecture) && \
+  wget -q "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+  dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+  rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
+
+# Copy and set up firewall script
+COPY init-firewall.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/init-firewall.sh
+
+WORKDIR /app
+
+# Set the default editor and visual
+ENV EDITOR=nvim
+ENV VISUAL=nvim
+
+# Install zsh-in-docker as appuser
+USER $APP_USER
+
+# Default powerline10k theme
+ARG ZSH_IN_DOCKER_VERSION=1.2.0
+RUN sh -c "$(wget -q -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
+  -p git \
+  -p fzf \
+  -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
+  -a "source /usr/share/doc/fzf/examples/completion.zsh" \
+  -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+  -x
+
+# Install Claude
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+
+USER root
