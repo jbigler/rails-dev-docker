@@ -64,19 +64,25 @@ run = "scripts/list-worktrees.sh"
 # usage = "arg <worktree> help=\"The git worktree to remove\" run=\"scripts/list-worktrees.sh\""
 
 [tasks."db:dump"]
-description = "Dump the development database to docker-config/db-dumps/ for faster container setup."
+description = "Dump the development database and RustFS data for faster container setup."
 run = """
   DUMP_DIR="{{ config_root }}/docker-config/db-dumps"
   mkdir -p "$DUMP_DIR"
   docker compose exec -T db pg_dump -Fc -U postgres filial_health_rails_core_development \
     > "$DUMP_DIR/filial_health_rails_core_development.dump"
-  echo "Dump saved to $DUMP_DIR/filial_health_rails_core_development.dump"
+  echo "DB dump saved."
+  docker run --rm \
+    -v "${COMPOSE_PROJECT_NAME}_rustfs_data:/data:ro" \
+    -v "$DUMP_DIR:/backup" \
+    alpine tar czf /backup/rustfs_data.tar.gz -C /data .
+  echo "RustFS dump saved."
+  echo "All dumps saved to $DUMP_DIR"
 """
 
 [tasks."db:dump:clear"]
-description = "Remove dump files so the next container start does a full db:prepare."
+description = "Remove all dump files so the next container start does a full db:prepare."
 run = """
   DUMP_DIR="{{ config_root }}/docker-config/db-dumps"
-  rm -f "$DUMP_DIR"/*.dump "$DUMP_DIR"/*.sql "$DUMP_DIR"/*.sql.gz
+  rm -f "$DUMP_DIR"/*.dump "$DUMP_DIR"/*.sql "$DUMP_DIR"/*.sql.gz "$DUMP_DIR"/rustfs_data.tar.gz
   echo "Cleared all dump files from $DUMP_DIR"
 """

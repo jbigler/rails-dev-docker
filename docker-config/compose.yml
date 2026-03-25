@@ -141,8 +141,29 @@ services:
       - dev
     command: ["npx", "-y", "playwright@1.58.2", "run-server", "--port", "8888"]
 
+  rustfs-init:
+    image: alpine
+    volumes:
+      - rustfs_data:/data
+      - ${DB_DUMP_DIR:-../docker-config/db-dumps}:/db-dumps:ro
+    command: >
+      sh -c '
+        if [ -f /db-dumps/rustfs_data.tar.gz ] && [ ! -d /data/rustfs0 ]; then
+          echo "rustfs-init: Restoring RustFS data from backup..."
+          tar xzf /db-dumps/rustfs_data.tar.gz -C /data
+          echo "rustfs-init: Done."
+        else
+          echo "rustfs-init: No restore needed."
+        fi
+      '
+    networks:
+      - dev
+
   rustfs:
     image: rustfs/rustfs:1.0.0-alpha.83
+    depends_on:
+      rustfs-init:
+        condition: service_completed_successfully
     environment:
       - RUSTFS_VOLUMES=/data/rustfs{0..3} # Define 4 storage volumes
       - RUSTFS_ACCESS_KEY=rustfsadmin
