@@ -66,6 +66,7 @@ done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | aggregate -q)
 # Resolve and add other allowed domains
 for domain in \
     "registry.npmjs.org" \
+    "claude.ai" \
     "api.anthropic.com" \
     "sentry.io" \
     "statsig.anthropic.com" \
@@ -99,6 +100,10 @@ fi
 
 HOST_NETWORK=$(echo "$HOST_IP" | sed "s/\.[0-9]*$/.0\/24/")
 echo "Host network detected as: $HOST_NETWORK"
+
+# Allow traffic to host MCP servers (e.g. Pencil via supergateway)
+echo "Allowing host MCP proxy on port 8089..."
+iptables -A OUTPUT -d "$HOST_IP" -p tcp --dport 8089 -j ACCEPT
 
 # Set up remaining iptables rules
 iptables -A INPUT -s "$HOST_NETWORK" -j ACCEPT

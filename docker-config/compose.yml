@@ -29,9 +29,12 @@ services:
       - "0.0.0.0:${RUBY_DEBUG_PORT:-38698}:38698"
     volumes:
       - ../${WORKTREE}:/app
+      - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
       - ../docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
       - ../docker-config/home:/home/appuser
       - shared_gems:/usr/local/bundle
+      - shared_node_modules:/app/node_modules
+      - shared_npm_global:/home/appuser/.npm-global
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
     entrypoint: ["entrypoint-app.sh"]
@@ -115,11 +118,15 @@ services:
     volumes:
       - ../docker-config/home:/home/appuser
       - ../${WORKTREE}:/app
+      - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
       - shared_gems:/usr/local/bundle
+      - shared_node_modules:/app/node_modules
+      - shared_npm_global:/home/appuser/.npm-global
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ../docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
+      - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
     tty: true
     stdin_open: true
     env_file: .env
@@ -198,10 +205,12 @@ services:
         ZSH_IN_DOCKER_VERSION: "1.2.0"
     volumes:
       - claude_config:/home/appuser/.claude
+      - shared_npm_global:/home/appuser/.npm-global
       - claude_bashhistory:/commandhistory
       - ../${WORKTREE}:/app
       - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
       - shared_gems:/usr/local/bundle
+      - shared_node_modules:/app/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ${SSH_PATH}:/home/appuser/.ssh:ro
@@ -224,10 +233,7 @@ services:
       - NET_RAW
     entrypoint: ["entrypoint-claude.sh"]
     command:
-      [
-        "/home/appuser/.npm-global/bin/claude",
-        "--allow-dangerously-skip-permissions",
-      ]
+      ["/home/appuser/.local/bin/claude", "--dangerously-skip-permissions"]
 
 volumes:
   home:
@@ -237,9 +243,15 @@ volumes:
     external: true
   claude_bashhistory:
     external: true
+  shared_npm_global:
+    external: true
+    name: ${NPM_GLOBAL_VOLUME:-shared_npm_global}
   shared_gems:
     external: true
     name: ${GEM_VOLUME:-shared_gems}
+  shared_node_modules:
+    external: true
+    name: ${NODE_MODULES_VOLUME:-shared_node_modules}
 
 networks:
   dev:

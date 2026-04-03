@@ -60,7 +60,6 @@ RUN apt-get update -qq && \
 RUN apt-get update -qq && \
   apt-get install --no-install-recommends -y \
   libpq-dev \
-  neovim \
   postgresql-client-16 \
   libyaml-dev \
   libsqlite3-0 \
@@ -78,14 +77,10 @@ RUN apt-get update -qq && \
   libtiff-dev \
   poppler-utils \
   poppler-data \
-  ghostscript \
   imagemagick \
   libmagickwand-dev \
   libmagickcore-dev && \
   rm -rf /var/lib/apt/lists/*
-
-# Disable PDF policy in ImageMagick
-# RUN sed -i '/PDF/d' /etc/ImageMagick-6/policy.xml
 
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
@@ -121,6 +116,8 @@ WORKDIR $APP_PATH
 ENV SHELL=/bin/zsh
 
 USER $APP_USER
+
+RUN mkdir -p $APP_PATH/node_modules
 
 RUN bundle install
 
@@ -177,13 +174,12 @@ CMD ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
 
 FROM base as claude
 
-ARG CLAUDE_CODE_VERSION=latest
-
 USER root
 
 RUN apt-get update -qq && \
   apt-get install -y \
   less \
+  neovim \
   procps \
   sudo \
   gosu \
@@ -236,15 +232,18 @@ USER $APP_USER
 
 # Default powerline10k theme
 ARG ZSH_IN_DOCKER_VERSION=1.2.0
-RUN sh -c "$(wget -q -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
+RUN bash -c "$(wget -q -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
   -p git \
   -p fzf \
   -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
   -a "source /usr/share/doc/fzf/examples/completion.zsh" \
   -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+  -a 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"' \
   -x
 
 # Install Claude
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+RUN /bin/bash -c "$(wget -qO- https://claude.ai/install.sh)"
+
+ENV PATH="/home/${APP_USER}/.local/bin:${PATH}"
 
 USER root
