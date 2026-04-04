@@ -102,6 +102,23 @@ else
     > "${worktree_dir}/mise.local.toml"
 fi
 
+# --- Ensure the shared gem volume exists for this Ruby version ---
+
+ruby_version=$(cat "${worktree_dir}/.ruby-version" 2>/dev/null | tr -d '[:space:]')
+if [ -n "$ruby_version" ] && [ -n "${GEM_VOLUME_BASE:-}" ]; then
+  ruby_slug=$(echo "$ruby_version" | tr '.' '_')
+  gem_volume="${GEM_VOLUME_BASE}_ruby_${ruby_slug}"
+
+  if ! docker volume inspect "$gem_volume" >/dev/null 2>&1; then
+    echo "Creating shared gem volume: ${gem_volume}"
+    docker volume create "$gem_volume"
+  fi
+fi
+
+# Pre-create node_modules so Docker doesn't create it as root when
+# mounting the shared_node_modules volume over the bind-mounted worktree.
+mkdir -p "${worktree_dir}/node_modules"
+
 echo ""
 echo "✓ Worktree created"
 echo "  Branch:          ${branch}"

@@ -11,6 +11,7 @@ services:
     env_file: .env
     environment:
       RUSTFS_ENDPOINT: http://rustfs:${RUSTFS_API_PORT:-9000}
+      GEM_VOLUME: ${GEM_VOLUME}
     deploy:
       resources:
         limits:
@@ -28,8 +29,8 @@ services:
       - "0.0.0.0:${APP_PORT:-3000}:3000"
       - "0.0.0.0:${RUBY_DEBUG_PORT:-38698}:38698"
     volumes:
-      - ../${WORKTREE}:/app
-      - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
+      - ../${CURRENT_WORKTREE_NAME}:/app
+      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
       - ../docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
       - ../docker-config/home:/home/appuser
       - shared_gems:/usr/local/bundle
@@ -117,8 +118,8 @@ services:
         NODE_VERSION: ${NODE_VERSION}
     volumes:
       - ../docker-config/home:/home/appuser
-      - ../${WORKTREE}:/app
-      - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
+      - ../${CURRENT_WORKTREE_NAME}:/app
+      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
       - shared_npm_global:/home/appuser/.npm-global
@@ -130,6 +131,8 @@ services:
     tty: true
     stdin_open: true
     env_file: .env
+    environment:
+      GEM_VOLUME: ${GEM_VOLUME}
     networks:
       - dev
     ports:
@@ -207,8 +210,8 @@ services:
       - claude_config:/home/appuser/.claude
       - shared_npm_global:/home/appuser/.npm-global
       - claude_bashhistory:/commandhistory
-      - ../${WORKTREE}:/app
-      - ${WORKTREE_MASTER}/.git:${WORKTREE_MASTER}/.git:ro
+      - ../${CURRENT_WORKTREE_NAME}:/app
+      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
@@ -221,6 +224,7 @@ services:
     stdin_open: true
     env_file: .env
     environment:
+      GEM_VOLUME: ${GEM_VOLUME}
       NODE_OPTIONS: "--max-old-space-size=4096"
       CLAUDE_CONFIG_DIR: "/home/appuser/.claude"
       POWERLEVEL9K_DISABLE_GITSTATUS: "true"

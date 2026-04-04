@@ -1,7 +1,8 @@
 [env]
 UID = "{{exec(command='id -u')}}"
 GID = "{{exec(command='id -g')}}"
-WORKTREE_MASTER = "{{ config_root }}/master"
+PROJECT_PREFIX = "{{env.PROJECT_PREFIX | default(value='default')}}"
+GEM_VOLUME_BASE = "{{env.GEM_VOLUME_BASE | default(value='default_shared_gems')}}"
 
 [tasks.nvim]
 description = "Connect to Neovim in the container with theme sync."
