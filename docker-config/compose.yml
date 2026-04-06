@@ -118,7 +118,7 @@ services:
     volumes:
       - ../docker-config/home:/home/appuser
       - ../${CURRENT_WORKTREE_NAME}:/app
-      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
+      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
       - ${SSH_PATH}:/home/appuser/.ssh:ro
@@ -207,7 +207,7 @@ services:
       - ../docker-config/home:/home/appuser
       - claude_bashhistory:/commandhistory
       - ../${CURRENT_WORKTREE_NAME}:/app
-      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
+      - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
