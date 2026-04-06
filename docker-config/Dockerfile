@@ -216,10 +216,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
 COPY init-firewall.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/init-firewall.sh
 
-COPY entrypoint-claude.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
-  echo "${APP_USER} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/firewall
-
 WORKDIR /app
 
 # Set the default editor and visual
@@ -241,5 +237,11 @@ RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42
   chmod 755 /opt/claude-code/bin/claude && \
   printf '#!/bin/sh\nexport DISABLE_AUTOUPDATER=1\nexec /opt/claude-code/bin/claude "$@"\n' > /usr/bin/claude && \
   chmod 755 /usr/bin/claude
+
+COPY entrypoint-claude.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
+  echo "${APP_USER} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/firewall
+
+ENTRYPOINT ["entrypoint-claude.sh"]
 
 USER $APP_USER
