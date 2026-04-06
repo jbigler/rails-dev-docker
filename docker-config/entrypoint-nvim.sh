@@ -4,6 +4,8 @@ set -xeuo pipefail
 mkdir -p ~/.config
 mkdir -p ~/.local
 
+npm install -g mcp-hub@latest
+
 export GIT_TERMINAL_PROMPT=0
 
 if [[ ! -f ~/.config/nvim/init.lua ]]; then

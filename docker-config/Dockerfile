@@ -84,6 +84,17 @@ RUN apt-get update -qq && \
 
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
+
+# Install GitHub CLI
+RUN (type -p wget >/dev/null || ( apt update && apt-get install wget -y)) \
+  && mkdir -p -m 755 /etc/apt/keyrings \
+  && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+  && apt update \
+  && apt install gh -y
+
+
 # 1. Copy Node directly from the official image
 COPY --from=node /usr/local/bin /usr/local/bin
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -101,15 +112,9 @@ RUN addgroup --gid "$APP_GROUP_GID" "$APP_GROUP" \
   && chmod -R g+w "$BUNDLE_APP_CONFIG" \
   && chown -R "$APP_USER":"$APP_GROUP" "$APP_PATH"
 
-# Set up npm global prefix in user home
-RUN mkdir -p /home/${APP_USER}/.npm-global && \
-  chown -R ${APP_USER}:${APP_GROUP} /home/${APP_USER}/.npm-global && \
-  su - ${APP_USER} -c "npm config set prefix '/home/${APP_USER}/.npm-global'"
 
-
-ENV PATH="/home/${APP_USER}/.npm-global/bin:${PATH}"
 ENV NPM_CONFIG_PREFIX="/home/${APP_USER}/.npm-global"
-ENV PATH="${PATH}:/app/node_modules/.bin"
+ENV PATH="/home/${APP_USER}/.local/bin:/home/${APP_USER}/.npm-global/bin:${PATH}:/app/node_modules/.bin"
 
 WORKDIR $APP_PATH
 
@@ -117,9 +122,10 @@ ENV SHELL=/bin/zsh
 
 USER $APP_USER
 
-RUN mkdir -p $APP_PATH/node_modules
-
-RUN bundle install
+# Set up npm global prefix in user home
+RUN mkdir -p /home/${APP_USER}/.npm-global && \
+  mkdir -p $APP_PATH/node_modules && \
+  bundle install
 
 SHELL ["/bin/zsh", "-c"]
 
@@ -143,14 +149,6 @@ USER root
 
 COPY --from=build-nvim /usr/local /usr/local/
 
-RUN (type -p wget >/dev/null || ( apt update && apt-get install wget -y)) \
-  && mkdir -p -m 755 /etc/apt/keyrings \
-  && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-  && apt update \
-  && apt install gh -y
-
 RUN --mount=type=cache,sharing=locked,target=/var/cache/apt apt-get update -qq && \
   apt-get install --no-install-recommends -y tree-sitter-cli xclip netbase fzf luarocks universal-ctags unzip ripgrep fzf fd-find lua5.4 
 
@@ -161,8 +159,6 @@ RUN wget -q -O /usr/local/bin/lazygit https://github.com/jesseduffield/lazygit/r
 RUN luarocks install dkjson
 
 USER $APP_USER
-
-RUN npm install -g mcp-hub@latest
 
 EXPOSE 7777
 CMD ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
@@ -176,13 +172,13 @@ FROM base as claude
 
 USER root
 
+COPY --from=build-nvim /usr/local /usr/local/
+
 RUN apt-get update -qq && \
   apt-get install -y \
   less \
-  neovim \
   procps \
   sudo \
-  gosu \
   fzf \
   man-db \
   unzip \
@@ -210,7 +206,6 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
   && touch /commandhistory/.bash_history \
   && chown -R $APP_USER /commandhistory
 
-
 ARG GIT_DELTA_VERSION=0.18.2
 RUN ARCH=$(dpkg --print-architecture) && \
   wget -q "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
@@ -221,29 +216,30 @@ RUN ARCH=$(dpkg --print-architecture) && \
 COPY init-firewall.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/init-firewall.sh
 
+COPY entrypoint-claude.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
+  echo "${APP_USER} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/firewall
+
 WORKDIR /app
 
 # Set the default editor and visual
 ENV EDITOR=nvim
 ENV VISUAL=nvim
 
-# Install zsh-in-docker as appuser
+# Install RTK
+ENV RTK_INSTALL_DIR=/usr/local/bin
+RUN /bin/bash -c "$(wget -qO- https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh)"
+
+# Install Claude Code globally (AUR direct-binary method)
+ARG CLAUDE_CODE_VERSION=latest
+RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
+  if [ "$CLAUDE_CODE_VERSION" = "latest" ]; then \
+  CLAUDE_CODE_VERSION=$(wget -qO- https://registry.npmjs.org/@anthropic-ai/claude-code/latest | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'); \
+  fi && \
+  mkdir -p /opt/claude-code/bin && \
+  wget -q -O /opt/claude-code/bin/claude "${GCS_BUCKET}/${CLAUDE_CODE_VERSION}/linux-x64/claude" && \
+  chmod 755 /opt/claude-code/bin/claude && \
+  printf '#!/bin/sh\nexport DISABLE_AUTOUPDATER=1\nexec /opt/claude-code/bin/claude "$@"\n' > /usr/bin/claude && \
+  chmod 755 /usr/bin/claude
+
 USER $APP_USER
-
-# Default powerline10k theme
-ARG ZSH_IN_DOCKER_VERSION=1.2.0
-RUN bash -c "$(wget -q -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
-  -p git \
-  -p fzf \
-  -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
-  -a "source /usr/share/doc/fzf/examples/completion.zsh" \
-  -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-  -a 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"' \
-  -x
-
-# Install Claude
-RUN /bin/bash -c "$(wget -qO- https://claude.ai/install.sh)"
-
-ENV PATH="/home/${APP_USER}/.local/bin:${PATH}"
-
-USER root

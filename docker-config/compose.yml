@@ -35,7 +35,6 @@ services:
       - ../docker-config/home:/home/appuser
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
-      - shared_npm_global:/home/appuser/.npm-global
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
     entrypoint: ["entrypoint-app.sh"]
@@ -122,7 +121,6 @@ services:
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
-      - shared_npm_global:/home/appuser/.npm-global
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ../docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
@@ -205,10 +203,8 @@ services:
         NODE_VERSION: ${NODE_VERSION}
         CLAUDE_CODE_VERSION: "latest"
         GIT_DELTA_VERSION: "0.18.2"
-        ZSH_IN_DOCKER_VERSION: "1.2.0"
     volumes:
-      - claude_config:/home/appuser/.claude
-      - shared_npm_global:/home/appuser/.npm-global
+      - ../docker-config/home:/home/appuser
       - claude_bashhistory:/commandhistory
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
@@ -218,7 +214,6 @@ services:
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ${SSH_AUTH_SOCK}:/tmp/ssh-agent.sock:ro
-      - ../docker-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
     tty: true
     stdin_open: true
@@ -236,8 +231,7 @@ services:
       - NET_ADMIN
       - NET_RAW
     entrypoint: ["entrypoint-claude.sh"]
-    command:
-      ["/home/appuser/.local/bin/claude", "--dangerously-skip-permissions"]
+    command: ["claude", "--dangerously-skip-permissions"]
 
 volumes:
   home:
@@ -247,9 +241,6 @@ volumes:
     external: true
   claude_bashhistory:
     external: true
-  shared_npm_global:
-    external: true
-    name: ${NPM_GLOBAL_VOLUME:-shared_npm_global}
   shared_gems:
     external: true
     name: ${GEM_VOLUME:-shared_gems}
