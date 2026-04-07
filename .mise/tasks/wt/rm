@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#MISE description="Remove a worktree"
 #USAGE arg "<worktree>" help="The git worktree to remove"
 #USAGE complete "worktree" run="../scripts/list-worktrees.sh"
 

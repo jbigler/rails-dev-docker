@@ -222,12 +222,9 @@ WORKDIR /app
 ENV EDITOR=nvim
 ENV VISUAL=nvim
 
-# Install RTK
-ENV RTK_INSTALL_DIR=/usr/local/bin
-RUN /bin/bash -c "$(wget -qO- https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh)"
+ARG CLAUDE_CODE_VERSION=latest
 
 # Install Claude Code globally (AUR direct-binary method)
-ARG CLAUDE_CODE_VERSION=latest
 RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
   if [ "$CLAUDE_CODE_VERSION" = "latest" ]; then \
   CLAUDE_CODE_VERSION=$(wget -qO- https://registry.npmjs.org/@anthropic-ai/claude-code/latest | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'); \
@@ -237,6 +234,10 @@ RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42
   chmod 755 /opt/claude-code/bin/claude && \
   printf '#!/bin/sh\nexport DISABLE_AUTOUPDATER=1\nexec /opt/claude-code/bin/claude "$@"\n' > /usr/bin/claude && \
   chmod 755 /usr/bin/claude
+
+# Install RTK
+ENV RTK_INSTALL_DIR=/usr/local/bin
+RUN /bin/bash -c "$(wget -qO- https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh)"
 
 COPY entrypoint-claude.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
