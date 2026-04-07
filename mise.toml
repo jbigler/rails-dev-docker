@@ -8,13 +8,7 @@ GEM_VOLUME_BASE = "{{env.GEM_VOLUME_BASE | default(value='default_shared_gems')}
 description = "Connect to Neovim in the container with theme sync."
 # We use a shell subquery to detect Kitty's background and inject the '-c' flag
 run = """
-  BG_COLOR=$(kitty @ get-colors | grep '^background' | awk '{print $2}');
-  if [[ \"$BG_COLOR\" == \"#ffffff\" || \"$BG_COLOR\" == \"#100f0f\" ]]; then
-    MODE=\"light\";
-  else
-    MODE=\"dark\";
-  fi;
-  nvim --remote-ui --server localhost:{{ env.NVIM_PORT }} -c \"set background=$MODE\"
+  nvim --remote-ui --server localhost:{{ env.NVIM_PORT }}
 """
 alias = "v"
 

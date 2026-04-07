@@ -231,7 +231,6 @@ services:
       - NET_ADMIN
       - NET_RAW
     entrypoint: ["entrypoint-claude.sh"]
-    command: ["claude", "--dangerously-skip-permissions"]
 
 volumes:
   home:

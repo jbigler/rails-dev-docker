@@ -12,9 +12,10 @@ claude mcp add --transport sse -s user pencil "http://${HOST_IP}:8089/sse" 2>/de
 # Initialize RTK
 rtk init -g --auto-patch
 
-# If the first arg starts with '-', assume the user is passing flags to claude
-if [ "${1:0:1}" = '-' ]; then
-  set -- claude --dangerously-skip-permissions "$@"
+# If first arg starts with '-' or no args given, run claude with skip-permissions
+# Otherwise run the given command directly (e.g., /bin/zsh)
+if [ $# -eq 0 ] || [ "${1#-}" != "$1" ]; then
+  exec claude --dangerously-skip-permissions "$@"
 fi
 
 exec "$@"
