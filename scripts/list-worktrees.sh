@@ -9,7 +9,9 @@ if [ -z "$git_dir" ]; then
   exit 1
 fi
 
+base_name=$(find_base_worktree_name)
+
 git -C "$git_dir" worktree list --porcelain \
   | grep "^worktree " \
   | sed "s|^worktree .*/||" \
-  | grep -vE "^(main|master)$"
+  | grep -v "^${base_name}$"

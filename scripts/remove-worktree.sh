@@ -22,16 +22,45 @@ if [ ! -d "$worktree_dir" ]; then
   exit 1
 fi
 
-# Find and stop the compose stack
-project_name=$(docker compose ls -aq 2>/dev/null | grep "$clean_name" | head -1 || true)
+# A linked worktree has a .git file; the base worktree has a .git directory
+if [ -d "${worktree_dir}/.git" ]; then
+  echo "Error: Cannot remove the base worktree (${clean_name})"
+  exit 1
+fi
 
-if [ -n "$project_name" ]; then
-  echo "Stopping compose stack: ${project_name}..."
-  docker compose -p "$project_name" down -v --remove-orphans --timeout 30 || true
-  if docker ps -q --filter "label=com.docker.compose.project=$project_name" | grep -q .; then
-    echo "Force removing lingering containers..."
-    docker rm -f $(docker ps -aq --filter "label=com.docker.compose.project=$project_name")
-  fi
+# Determine compose project name (mirrors mise.local.toml.template)
+project_prefix="${PROJECT_PREFIX:-default}"
+project_name="${project_prefix}-${clean_name}"
+
+echo "Stopping compose stack: ${project_name}..."
+docker compose -p "$project_name" down -v --rmi local --remove-orphans --timeout 30 || true
+
+# Force-remove any lingering containers
+lingering=$(docker ps -aq --filter "label=com.docker.compose.project=$project_name")
+if [ -n "$lingering" ]; then
+  echo "Force removing lingering containers..."
+  docker rm -f $lingering
+fi
+
+# Remove any orphaned volumes belonging to this project
+orphan_volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=$project_name")
+if [ -n "$orphan_volumes" ]; then
+  echo "Removing orphaned volumes..."
+  docker volume rm $orphan_volumes || true
+fi
+
+# Remove any orphaned networks belonging to this project
+orphan_networks=$(docker network ls -q --filter "label=com.docker.compose.project=$project_name")
+if [ -n "$orphan_networks" ]; then
+  echo "Removing orphaned networks..."
+  docker network rm $orphan_networks || true
+fi
+
+# Remove any orphaned images belonging to this project
+orphan_images=$(docker images -q --filter "label=com.docker.compose.project=$project_name")
+if [ -n "$orphan_images" ]; then
+  echo "Removing orphaned images..."
+  docker rmi $orphan_images || true
 fi
 
 # Deregister ports
@@ -60,11 +89,12 @@ echo "Removing worktree directory..."
 rm -rf "$worktree_dir"
 run_git worktree prune
 
-master_dir="${PWD}/master"
+base_name=$(find_base_worktree_name)
+base_dir="${PWD}/${base_name}"
 echo "✓ Removed worktree: ${worktree_dir}"
 
-# Change to master directory
-if [ -d "$master_dir" ]; then
-  echo "Changing to master directory..."
-  cd "$master_dir"
+# Change to base worktree directory
+if [ -d "$base_dir" ]; then
+  echo "Changing to ${base_name} directory..."
+  cd "$base_dir"
 fi

@@ -48,9 +48,10 @@ if [ -d "$worktree_dir" ]; then
 fi
 
 REGISTRY="${PWD}/ports.registry"
+base_name=$(find_base_worktree_name)
 
 if [ ! -f "$REGISTRY" ]; then
-  echo "master:3000:7000:9000:9100" > "$REGISTRY"
+  echo "${base_name}:3000:7000:9000:9100" > "$REGISTRY"
 fi
 
 next_port_in_column() {
