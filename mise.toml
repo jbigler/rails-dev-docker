@@ -46,7 +46,7 @@ description = "Run the CI linting and tests."
 run = "docker compose run app bundle exec rake ci:build:commit"
 
 [tasks.wt]
-description = "Create a worktree: mise run wt <branch|PR#>"
+description = "Create a worktree: mise run wt <branch|PR#|new-branch-name>"
 run = ".scripts/create-worktree.sh {{arg(name=\"branch\")}}"
 
 [tasks."wt:ls"]

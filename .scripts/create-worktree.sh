@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-input="${1:?Usage: mise run wt <branch-name|PR#>}"
+input="${1:?Usage: mise run wt <branch-name|PR#|new-branch-name>}"
 
 # --- Find a git worktree to run git commands from ---
 
@@ -85,7 +85,10 @@ if run_git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
 elif run_git show-ref --verify --quiet "refs/remotes/origin/${branch}" 2>/dev/null; then
   run_git worktree add "$worktree_dir" "$branch"
 else
-  run_git worktree add -b "$branch" "$worktree_dir"
+  base_branch=$(run_git symbolic-ref --short HEAD)
+  echo "Branch '${branch}' not found locally or on remote."
+  echo "Creating new branch based on ${base_branch}..."
+  run_git worktree add -b "$branch" "$worktree_dir" "$base_branch"
 fi
 
 # --- Generate mise.local.toml from template ---
