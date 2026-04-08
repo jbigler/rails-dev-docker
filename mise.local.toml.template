@@ -2,7 +2,7 @@
 CURRENT_WORKTREE_NAME = "{{ exec(command='git rev-parse --show-toplevel') | basename }}"
 MAIN_WORKTREE_PATH = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}"
 COMPOSE_PROJECT_NAME = "{{ env.PROJECT_PREFIX }}-{{ env.CURRENT_WORKTREE_NAME }}"
-COMPOSE_FILE = "{% set dev = '.dev/compose.yml' %}{{config_root}}/../docker-config/compose.yml{% if dev is exists %}:{{config_root}}/.dev/compose.yml{% endif %}"
+COMPOSE_FILE = "{% set dev = '.dev/compose.yml' %}{{config_root}}/../.docker-config/compose.yml{% if dev is exists %}:{{config_root}}/.dev/compose.yml{% endif %}"
 RUBY_DEBUG_LOCAL_FS_MAP = "/app/:{{ cwd }}"
 RUBY_VERSION = "{{ read_file(path='.ruby-version') | trim }}"
 GEM_VOLUME = "{{ env.GEM_VOLUME_BASE }}_ruby_{{ env.RUBY_VERSION | trim | replace(from='.', to='_') }}"

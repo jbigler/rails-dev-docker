@@ -6,6 +6,7 @@ input="${1:?Usage: mise run wt <branch-name|PR#>}"
 # --- Find a git worktree to run git commands from ---
 
 source "$(dirname "$0")/lib.sh"
+root=$(find_project_root)
 git_dir=$(find_git_dir)
 
 run_git() {
@@ -40,14 +41,14 @@ fi
 # --- Sanitize for directory and compose project name ---
 
 clean_name=$(echo "$branch" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g; s/^-//; s/-$//')
-worktree_dir="${PWD}/${clean_name}"
+worktree_dir="${root}/${clean_name}"
 
 if [ -d "$worktree_dir" ]; then
   echo "Worktree already exists: $worktree_dir"
   exit 1
 fi
 
-REGISTRY="${PWD}/ports.registry"
+REGISTRY="${root}/ports.registry"
 base_name=$(find_base_worktree_name)
 
 if [ ! -f "$REGISTRY" ]; then
@@ -89,7 +90,7 @@ fi
 
 # --- Generate mise.local.toml from template ---
 
-template_file="${PWD}/mise.local.toml.template"
+template_file="${root}/mise.local.toml.template"
 if [ ! -f "$template_file" ]; then
   echo "Warning: ${template_file} not found, skipping"
 else

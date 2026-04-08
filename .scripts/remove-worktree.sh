@@ -4,6 +4,7 @@ set -euo pipefail
 input="${1:?Usage: mise run wt:rm <branch|dir-name>}"
 
 source "$(dirname "$0")/lib.sh"
+root=$(find_project_root)
 git_dir=$(find_git_dir)
 
 run_git() {
@@ -12,7 +13,7 @@ run_git() {
 
 # Sanitize the same way as creation
 clean_name=$(echo "$input" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g; s/^-//; s/-$//')
-worktree_dir="${PWD}/${clean_name}"
+worktree_dir="${root}/${clean_name}"
 
 if [ ! -d "$worktree_dir" ]; then
   echo "Worktree not found: $worktree_dir"
@@ -64,7 +65,7 @@ if [ -n "$orphan_images" ]; then
 fi
 
 # Deregister ports
-REGISTRY="${PWD}/ports.registry"
+REGISTRY="${root}/ports.registry"
 if [ -f "$REGISTRY" ]; then
   sed -i.bak "/^${clean_name}:/d" "$REGISTRY"
   rm -f "${REGISTRY}.bak"
@@ -90,7 +91,7 @@ rm -rf "$worktree_dir"
 run_git worktree prune
 
 base_name=$(find_base_worktree_name)
-base_dir="${PWD}/${base_name}"
+base_dir="${root}/${base_name}"
 echo "✓ Removed worktree: ${worktree_dir}"
 
 # Change to base worktree directory

@@ -31,8 +31,8 @@ services:
     volumes:
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
-      - ../docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
-      - ../docker-config/home:/home/appuser
+      - ../.docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
+      - ../.docker-config/home:/home/appuser
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
@@ -70,8 +70,8 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
-      - ../docker-config/initdb/restore-dump.sh:/docker-entrypoint-initdb.d/restore-dump.sh:ro
-      - ${DB_DUMP_DIR:-../docker-config/db-dumps}:/db-dumps:ro
+      - ../.docker-config/initdb/restore-dump.sh:/docker-entrypoint-initdb.d/restore-dump.sh:ro
+      - ${DB_DUMP_DIR:-../.docker-config/db-dumps}:/db-dumps:ro
     command: >
       postgres
       -c shared_preload_libraries='pg_stat_statements'
@@ -116,13 +116,13 @@ services:
         RUBY_VERSION: ${RUBY_VERSION}
         NODE_VERSION: ${NODE_VERSION}
     volumes:
-      - ../docker-config/home:/home/appuser
+      - ../.docker-config/home:/home/appuser
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
       - shared_node_modules:/app/node_modules
       - ${SSH_PATH}:/home/appuser/.ssh:ro
-      - ../docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
+      - ../.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
@@ -153,7 +153,7 @@ services:
     image: alpine
     volumes:
       - rustfs_data:/data
-      - ${DB_DUMP_DIR:-../docker-config/db-dumps}:/db-dumps:ro
+      - ${DB_DUMP_DIR:-../.docker-config/db-dumps}:/db-dumps:ro
     command: >
       sh -c '
         if [ -f /db-dumps/rustfs_data.tar.gz ] && [ ! -d /data/rustfs0 ]; then
@@ -204,7 +204,7 @@ services:
         CLAUDE_CODE_VERSION: "latest"
         GIT_DELTA_VERSION: "0.18.2"
     volumes:
-      - ../docker-config/home:/home/appuser
+      - ../.docker-config/home:/home/appuser
       - claude_bashhistory:/commandhistory
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
