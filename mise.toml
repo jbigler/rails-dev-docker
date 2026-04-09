@@ -79,5 +79,9 @@ run = """
 
 [tasks.claude]
 description = "Run Claude AI assistant in a new Kitty tab."
-run = "kitty @ launch --type=tab --title=Claude -- docker compose run --rm claude"
+run = "kitty @ launch --type=tab --cwd=current --tab-title=Claude --copy-env=yes -- docker compose run --rm claude"
 alias = "ai"
+
+[tasks."claude:rebuild"]
+description = "Rebuild the Claude container with the latest Claude Code version."
+run = "docker compose build --build-arg UPDATE_CLAUDE_CODE=$(date +%s) claude"

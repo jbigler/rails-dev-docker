@@ -223,6 +223,7 @@ ENV EDITOR=nvim
 ENV VISUAL=nvim
 
 ARG CLAUDE_CODE_VERSION=latest
+ARG UPDATE_CLAUDE_CODE=0
 
 # Install Claude Code globally (AUR direct-binary method)
 RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
@@ -243,6 +244,6 @@ COPY entrypoint-claude.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
   echo "${APP_USER} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/firewall
 
-ENTRYPOINT ["entrypoint-claude.sh"]
+ENTRYPOINT ["/usr/local/bin/entrypoint-claude.sh"]
 
 USER $APP_USER
