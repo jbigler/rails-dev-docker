@@ -1,0 +1,3 @@
+worktrees/*
+!worktrees/.keep
+mise.local.toml
