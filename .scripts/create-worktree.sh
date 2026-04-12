@@ -79,7 +79,7 @@ fi
 
 # --- Generate mise.local.toml from template ---
 
-template_file="${root}/mise.local.toml.template"
+template_file="${root}/.mise/local.toml.template"
 if [ ! -f "$template_file" ]; then
   echo "Warning: ${template_file} not found, skipping"
 else
