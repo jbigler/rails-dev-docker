@@ -52,31 +52,17 @@ REGISTRY="${root}/ports.registry"
 base_name=$(find_base_worktree_name)
 
 if [ ! -f "$REGISTRY" ]; then
-  echo "${base_name}:3000:7000:9000:9100" > "$REGISTRY"
+  echo "${base_name}:0" > "$REGISTRY"
 fi
 
-next_port_in_column() {
-  local col=$1
-  local base=$2
-  local max=$base
-  while IFS=: read -r name p1 p2 p3 p4; do
-    case $col in
-      1) p=$p1 ;;
-      2) p=$p2 ;;
-      3) p=$p3 ;;
-      4) p=$p4 ;;
-    esac
-    [ "$p" -gt "$max" ] 2>/dev/null && max=$p
-  done < "$REGISTRY"
-  echo $((max + 1))
-}
+# Find the next available ID by incrementing the highest current one
+max_id=0
+while IFS=: read -r _name id; do
+  [ "$id" -gt "$max_id" ] 2>/dev/null && max_id=$id
+done < "$REGISTRY"
+next_id=$((max_id + 1))
 
-app_port=$(next_port_in_column 1 3000)
-nvim_port=$(next_port_in_column 2 7000)
-rustfs_api_port=$(next_port_in_column 3 9000)
-rustfs_ui_port=$(next_port_in_column 4 9100)
-
-echo "${clean_name}:${app_port}:${nvim_port}:${rustfs_api_port}:${rustfs_ui_port}" >> "$REGISTRY"
+echo "${clean_name}:${next_id}" >> "$REGISTRY"
 
 # --- Create worktree ---
 
@@ -97,14 +83,7 @@ template_file="${root}/mise.local.toml.template"
 if [ ! -f "$template_file" ]; then
   echo "Warning: ${template_file} not found, skipping"
 else
-  sed \
-    -e "s|{{RUBY_DEBUG_PORT}}|3${app_port}|g" \
-    -e "s|{{APP_PORT}}|${app_port}|g" \
-    -e "s|{{NVIM_PORT}}|${nvim_port}|g" \
-    -e "s|{{RUSTFS_API_PORT}}|${rustfs_api_port}|g" \
-    -e "s|{{RUSTFS_UI_PORT}}|${rustfs_ui_port}|g" \
-    "$template_file" \
-    > "${worktree_dir}/mise.local.toml"
+  sed "s|{{WORKTREE_ID}}|${next_id}|g" "$template_file" > "${worktree_dir}/mise.local.toml"
 fi
 
 # --- Ensure the shared gem volume exists for this Ruby version ---
@@ -128,10 +107,11 @@ echo ""
 echo "✓ Worktree created"
 echo "  Branch:          ${branch}"
 echo "  Directory:       ${worktree_dir}"
-echo "  App port:        ${app_port}"
-echo "  Neovim port:     ${nvim_port}"
-echo "  RustFS API port: ${rustfs_api_port}"
-echo "  RustFS UI port:  ${rustfs_ui_port}"
+echo "  Worktree ID:     ${next_id}"
+echo "  App port:        $((3000 + next_id))"
+echo "  Neovim port:     $((7000 + next_id))"
+echo "  RustFS API port: $((9000 + next_id))"
+echo "  RustFS UI port:  $((9100 + next_id))"
 echo ""
 cd "${worktree_dir}"
 
