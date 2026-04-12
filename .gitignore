@@ -1,3 +1,15 @@
-worktrees/*
-!worktrees/.keep
+# Ignore everything by default
+/*
+
+# Include the docker-config directory and its contents (except for the home directory)
+!/.docker-config/
+!/.docker-config/home/.gitkeep
+!/.docker-config/db-dumps/.gitkeep
+
+# Include the mise files
+!/mise.*
+!/.mise/
 mise.local.toml
+
+# Include the scripts
+!/.scripts/
