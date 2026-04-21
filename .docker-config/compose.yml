@@ -139,7 +139,7 @@ services:
     command: ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
 
   playwright:
-    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    image: mcr.microsoft.com/playwright:v1.59.0-noble
     shm_size: "1gb"
     ipc: host
     init: true
@@ -147,7 +147,7 @@ services:
     #   - "${PLAYWRIGHT_PORT:-8888}:8888"
     networks:
       - dev
-    command: ["npx", "-y", "playwright@1.58.2", "run-server", "--port", "8888"]
+    command: ["npx", "-y", "playwright@1.59.0", "run-server", "--port", "8888"]
 
   rustfs-init:
     image: alpine

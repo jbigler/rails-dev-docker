@@ -1,9 +1,12 @@
 # Ignore everything by default
 /*
 
-# Include the docker-config directory and its contents (except for the home directory)
+# Include the docker-config directory and its contents (except for the home and db-dumps directories)
 !/.docker-config/
+/.docker-config/home/*
+/.docker-config/home/.*
 !/.docker-config/home/.gitkeep
+/.docker-config/db-dumps/*
 !/.docker-config/db-dumps/.gitkeep
 
 # Include the mise files

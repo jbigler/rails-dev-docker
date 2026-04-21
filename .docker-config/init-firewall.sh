@@ -42,7 +42,7 @@ ipset create allowed-domains hash:net
 
 # Fetch GitHub meta information and aggregate + add their IP ranges
 echo "Fetching GitHub IP ranges..."
-gh_ranges=$(curl -s https://api.github.com/meta)
+gh_ranges=$(curl -s --max-time 15 https://api.github.com/meta)
 if [ -z "$gh_ranges" ]; then
     echo "ERROR: Failed to fetch GitHub IP ranges"
     exit 1
@@ -61,7 +61,30 @@ while read -r cidr; do
     fi
     echo "Adding GitHub range $cidr"
     ipset add allowed-domains "$cidr" -exist
-done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | aggregate -q)
+done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[] | select(test("^[0-9.]+/[0-9]+$"))' | aggregate -q)
+
+# Fetch Datadog US5 IP ranges and add them
+echo "Fetching Datadog US5 IP ranges..."
+dd_ranges=$(curl -s --max-time 15 https://ip-ranges.us5.datadoghq.com/api.json)
+if [ -z "$dd_ranges" ]; then
+    echo "ERROR: Failed to fetch Datadog US5 IP ranges"
+    exit 1
+fi
+
+if ! echo "$dd_ranges" | jq -e '.api.prefixes_ipv4' >/dev/null; then
+    echo "ERROR: Datadog API response missing required fields"
+    exit 1
+fi
+
+echo "Processing Datadog US5 IPs..."
+while read -r cidr; do
+    if [[ ! "$cidr" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
+        echo "ERROR: Invalid CIDR range from Datadog US5: $cidr"
+        exit 1
+    fi
+    echo "Adding Datadog US5 range $cidr"
+    ipset add allowed-domains "$cidr" -exist
+done < <(echo "$dd_ranges" | jq -r '.api.prefixes_ipv4[]')
 
 # Resolve and add other allowed domains
 for domain in \
@@ -73,7 +96,8 @@ for domain in \
     "statsig.com" \
     "marketplace.visualstudio.com" \
     "vscode.blob.core.windows.net" \
-    "update.code.visualstudio.com"; do
+    "update.code.visualstudio.com" \
+    "mcp.datadoghq.com"; do
     echo "Resolving $domain..."
     ips=$(dig +noall +answer A "$domain" | awk '$4 == "A" {print $5}')
     if [ -z "$ips" ]; then

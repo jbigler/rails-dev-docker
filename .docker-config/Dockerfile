@@ -212,10 +212,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
   dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
   rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
 
-# Copy and set up firewall script
-COPY init-firewall.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/init-firewall.sh
-
 WORKDIR /app
 
 # Set the default editor and visual
@@ -239,6 +235,10 @@ RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42
 # Install RTK
 ENV RTK_INSTALL_DIR=/usr/local/bin
 RUN /bin/bash -c "$(wget -qO- https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh)"
+
+# Copy and set up firewall script
+COPY init-firewall.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/init-firewall.sh
 
 COPY entrypoint-claude.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
