@@ -16,9 +16,10 @@
 
 ### Adopt an existing local checkout
 
-If you already have the Rails app checked out and want to keep that folder in place
-(branches, uncommitted work, untracked files), use `adopt.sh` instead of `bootstrap.sh`.
-It **symlinks** your existing checkout in as the base worktree rather than cloning a fresh copy.
+If you already have the Rails app checked out (branches, uncommitted work, untracked files)
+and don't want to re-clone, use `adopt.sh` instead of `bootstrap.sh`. It **moves** your
+existing checkout in as the base worktree and leaves a **backward symlink** at the original
+location, so your old path keeps working everywhere (editor, terminals, scripts).
 
 ```sh
 # 1. Clone this wrapper next to your app
@@ -26,17 +27,21 @@ git clone https://github.com/jcarlos7121/rails-dev-docker.git ~/code/rails-dev
 
 # 2. From the wrapper root, adopt your existing checkout
 cd ~/code/rails-dev
-./.scripts/adopt.sh [-p <prefix>] /path/to/your/existing/checkout
+./.scripts/adopt.sh [-p <prefix>] [-b <base-name>] /path/to/your/existing/checkout
 ```
 
-- `-p <prefix>` = optional Docker volume/network prefix (defaults to the checkout's folder name)
+- `-p <prefix>` = Docker volume/network prefix (defaults to the checkout's folder name)
+- `-b <base-name>` = base worktree directory name (defaults to the folder name; set to your
+  default branch, e.g. `-b master`, to match the clone-time convention)
 - `<path>` = path to an existing Rails checkout (must be a git repo root)
 
-What it does (all non-destructive; the original folder is never moved):
+What it does:
 
-- Creates a symlink `./<app-basename> -> /path/to/your/existing/checkout` as the base worktree (ID 0).
-  The symlink **must** match the checkout's real folder name — git resolves it to the real path, and
-  the Docker bind-mount is derived from that name.
+- **Moves** `/path/to/your/existing/checkout` to `./<base-name>` (physically under the wrapper
+  root — required, since mise resolves config by physical path and the base must inherit the
+  wrapper's `.mise` config + tasks), then symlinks the original path to it so it keeps resolving.
+  A *forward* symlink (leaving the app in place) does **not** work: the base would resolve outside
+  the root and mise couldn't find `PROJECT_PREFIX`/tasks.
 - Writes a git-ignored `mise.local.toml` at the wrapper root with `PROJECT_PREFIX`, volume names,
   `DEV_DB_NAME` (auto-detected from `config/database.yml`, falling back to `<prefix>_development`),
   and `NVIM_CONFIG_DIR`.
@@ -47,7 +52,7 @@ Then:
 
 ```sh
 cd ~/code/rails-dev && mise trust && mise install
-cd ~/code/rails-dev/<app-basename> && mise trust && mise install && mise run up
+cd ~/code/rails-dev/<base-name> && mise trust && mise install && mise run up
 ```
 
 Notes:
