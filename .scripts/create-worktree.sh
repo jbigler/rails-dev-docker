@@ -139,7 +139,7 @@ echo "  Worktree ID:     ${next_id}"
 echo "  App URL:         http://${clean_name}.localhost"
 echo "  RustFS API URL:  http://s3.${clean_name}.localhost"
 echo "  RustFS UI URL:   http://s3-ui.${clean_name}.localhost"
-echo "  Neovim port:     $((7000 + next_id))"
+echo "  Neovim port:     $((17000 + next_id))"
 echo "  Ruby debug port: $((33000 + next_id))"
 echo ""
 echo "Note: 'mise run up' auto-starts the proxy; if running compose directly,"
@@ -147,5 +147,7 @@ echo "      run 'mise run proxy:up' first."
 echo ""
 cd "${worktree_dir}"
 
-mise install
+# Trust before install — mise refuses to read an untrusted config, so trusting
+# must come first or `mise install` fails on the freshly generated mise.local.toml.
 mise trust -y
+mise install
