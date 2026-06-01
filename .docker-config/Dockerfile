@@ -109,11 +109,14 @@ RUN --mount=type=cache,target=$BUNDLE_APP_CONFIG \
 
 COPY Gemfile* $APP_PATH/
 
-RUN addgroup --gid "$APP_GROUP_GID" "$APP_GROUP" \
-  && useradd -g "$APP_GROUP" -s /bin/zsh -p '' --uid "$APP_USER_UID" -m "$APP_USER" \
-  && chgrp -R "$APP_GROUP" "$BUNDLE_APP_CONFIG" \
+# Reuse a pre-existing group if the host GID is already taken in the base image
+# (e.g. macOS primary group `staff`=20 collides with Debian's `dialout`). Reference
+# the group by numeric GID throughout so the group name is irrelevant.
+RUN if ! getent group "$APP_GROUP_GID" >/dev/null 2>&1; then addgroup --gid "$APP_GROUP_GID" "$APP_GROUP"; fi \
+  && useradd -g "$APP_GROUP_GID" -s /bin/zsh -p '' --uid "$APP_USER_UID" -m "$APP_USER" \
+  && chgrp -R "$APP_GROUP_GID" "$BUNDLE_APP_CONFIG" \
   && chmod -R g+w "$BUNDLE_APP_CONFIG" \
-  && chown -R "$APP_USER":"$APP_GROUP" "$APP_PATH"
+  && chown -R "$APP_USER_UID":"$APP_GROUP_GID" "$APP_PATH"
 
 
 ENV NPM_CONFIG_PREFIX="/home/${APP_USER}/.npm-global"
