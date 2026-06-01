@@ -115,11 +115,11 @@ run = "docker compose run --label \"traefik.enable=false\" app bundle exec rake 
 [tasks.wt]
 description = "Create a worktree: mise run wt <branch|PR#|new-branch-name>"
 usage = 'arg "<branch>" help="existing branch name, PR number, or new branch name"'
-run = '.scripts/create-worktree.sh "$usage_branch"'
+run = '{{config_root}}/.scripts/create-worktree.sh "$usage_branch"'
 
 [tasks."wt:ls"]
 description = "List all worktrees"
-run = ".scripts/list-worktrees.sh"
+run = "{{config_root}}/.scripts/list-worktrees.sh"
 
 [tasks."wt:open"]
 description = "Open the current worktree URL in a browser. Pass a browser binary name (e.g. firefox) to override xdg-open."
