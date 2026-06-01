@@ -14,6 +14,50 @@
 - `prefix` = optional name for project/folder (will use repo name by default)
 - `user/repo` = Github user/repo (or a full URL to git repository)
 
+### Adopt an existing local checkout
+
+If you already have the Rails app checked out and want to keep that folder in place
+(branches, uncommitted work, untracked files), use `adopt.sh` instead of `bootstrap.sh`.
+It **symlinks** your existing checkout in as the base worktree rather than cloning a fresh copy.
+
+```sh
+# 1. Clone this wrapper next to your app
+git clone https://github.com/jcarlos7121/rails-dev-docker.git ~/code/rails-dev
+
+# 2. From the wrapper root, adopt your existing checkout
+cd ~/code/rails-dev
+./.scripts/adopt.sh [-p <prefix>] /path/to/your/existing/checkout
+```
+
+- `-p <prefix>` = optional Docker volume/network prefix (defaults to the checkout's folder name)
+- `<path>` = path to an existing Rails checkout (must be a git repo root)
+
+What it does (all non-destructive; the original folder is never moved):
+
+- Creates a symlink `./<app-basename> -> /path/to/your/existing/checkout` as the base worktree (ID 0).
+  The symlink **must** match the checkout's real folder name — git resolves it to the real path, and
+  the Docker bind-mount is derived from that name.
+- Writes a git-ignored `mise.local.toml` at the wrapper root with `PROJECT_PREFIX`, volume names,
+  `DEV_DB_NAME` (auto-detected from `config/database.yml`, falling back to `<prefix>_development`),
+  and `NVIM_CONFIG_DIR`.
+- Renders the base worktree's `mise.local.toml` (ports/URLs) and locally git-ignores it in the app repo.
+- Creates the external Docker volumes.
+
+Then:
+
+```sh
+cd ~/code/rails-dev && mise trust && mise install
+cd ~/code/rails-dev/<app-basename> && mise trust && mise install && mise run up
+```
+
+Notes:
+
+- **Per-worktree files:** list untracked files (e.g. `.env.local`, `config/master.key`) in
+  `.docker-config/worktree-seed.txt`; each new worktree gets its own copy from the base worktree.
+- **Symlinked nvim configs:** if your `~/.config/nvim` contains symlinks (e.g. into a dotfiles repo),
+  set `NVIM_CONFIG_DIR` in `mise.local.toml` to the real directory so the in-container mount doesn't
+  dangle.
+
 ## Mise tasks
 
 Run from a worktree directory unless noted otherwise. Aliases shown in parentheses.
