@@ -16,3 +16,15 @@ DOMAIN = "{{ env.WORKTREE_HOST }}"
 RUBY_DEBUG_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 33000 + id }}"
 NVIM_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 17000 + id }}"
 RUSTFS_ENDPOINT = "http://{{ env.S3_HOST }}"
+
+# Host → container Postgres over TCP (the bind-mounted UNIX socket does not work
+# across the macOS Docker Desktop VM boundary). DB_PORT is published per worktree
+# by the db service; these PG* vars are host-shell only and never enter the
+# container (the app service has no PG* passthrough), so `bin/rails`, `psql`, etc.
+# run on the host resolve to this worktree's containerized Postgres. RAILS_ENV
+# selects development vs test database automatically.
+DB_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 55432 + id }}"
+PGHOST = "127.0.0.1"
+PGPORT = "{{ env.DB_PORT }}"
+PGUSER = "postgres"
+PGPASSWORD = "password"

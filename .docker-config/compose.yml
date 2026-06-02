@@ -75,6 +75,10 @@ services:
     env_file: .env
     environment:
       POSTGRES_PASSWORD: ${PGPASSWORD:-password}
+    # Publish Postgres on a per-worktree host port so host-side `bin/rails`/`psql`
+    # can reach this worktree's DB over TCP (bound to localhost only).
+    ports:
+      - "127.0.0.1:${DB_PORT:-55432}:5432"
     networks:
       - dev
     volumes:
