@@ -79,6 +79,12 @@ description = "Start the application."
 depends = ["proxy:up"]
 run = """
   mkdir -p {{config_root}}/.docker-config/home/.ssh {{config_root}}/.docker-config/home/.config
+  # Clear stale Postgres socket files when db isn't running — on macOS the
+  # bind-mounted socket dir can't be chowned by a restarting container, which
+  # otherwise crashes postgres with "chown ... .s.PGSQL.5432: Invalid argument".
+  if [ -n "${SOCKET_DIR:-}" ] && ! docker compose ps --status running --services 2>/dev/null | grep -qx db; then
+    rm -f "${SOCKET_DIR}/db/.s.PGSQL."* 2>/dev/null || true
+  fi
   for vol in claude_config claude_bashhistory "$GEM_VOLUME" "$NODE_MODULES_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done

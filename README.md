@@ -104,3 +104,16 @@ _Tip: Set a shell alias for "mise run" to "mr"._
 
 - `mise run db:dump` — dump dev DB and RustFS data into `.docker-config/db-dumps/` for fast container restarts
 - `mise run db:dump:clear` — remove dump files so the next start does a full `db:prepare`
+
+### Host-side Rails DB commands
+
+You can run `bin/rails db:migrate`, `bin/rails console`, `bin/rails test`, `psql`, etc. **directly on the host** (not via `docker compose run`) and have them hit this worktree's containerized Postgres — while the app server stays containerized and browser-reachable.
+
+How it works: each worktree's `db` container publishes Postgres on a per-worktree host port (`127.0.0.1:${DB_PORT}` where `DB_PORT = 55432 + WORKTREE_ID`), and `mise.local.toml` sets host-shell `PGHOST=127.0.0.1`, `PGPORT=${DB_PORT}`, `PGUSER`, `PGPASSWORD`. These `PG*` vars are host-only — they never enter the container (the `app` service reads `PGHOST` from `env_file`, the internal socket), so the container keeps using its socket. Rails picks development vs test automatically from `RAILS_ENV` (both databases live in the same container Postgres).
+
+Requirements / notes:
+
+- **A host bundle**: host-side `bin/rails` needs the gems installed for your host Ruby (`bundle install` on the host). The `pg` gem needs libpq (e.g. Homebrew `libpq`).
+- The bind-mounted Postgres **UNIX socket does not work from the macOS host** (Docker Desktop VM boundary), which is why this uses a published TCP port.
+- Per-worktree ports (55432, 55433, …) let multiple worktrees' databases run concurrently without collisions.
+- After migrating, keep the test schema in sync (`bin/rails db:test:prepare`, or `RAILS_ENV=test bin/rails db:migrate`).
