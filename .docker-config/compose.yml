@@ -164,6 +164,10 @@ services:
     shm_size: "1gb"
     ipc: host
     init: true
+    # Expose the browser server to the host (loopback only) so system tests run
+    # ON THE HOST can connect to this containerized browser. Port is per-worktree.
+    ports:
+      - "127.0.0.1:${PLAYWRIGHT_HOST_PORT:-18888}:8888"
     environment:
       HEADLESS_SYSTEM_TESTS: ${HEADLESS_SYSTEM_TESTS:-0}
     networks:

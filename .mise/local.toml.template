@@ -28,3 +28,12 @@ PGHOST = "127.0.0.1"
 PGPORT = "{{ env.DB_PORT }}"
 PGUSER = "postgres"
 PGPASSWORD = "password"
+
+# Host → containerized Playwright browser server (published per worktree by the
+# playwright service), so system tests run ON THE HOST connect to this worktree's
+# in-container browser. APP_HOST is how that browser navigates back to the
+# Capybara test server running on the host (Docker Desktop host alias).
+# These are host-shell only — inside the containers, .docker-config/.env wins.
+PLAYWRIGHT_HOST_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 18888 + id }}"
+PLAYWRIGHT_HOST = "ws://localhost:{{ env.PLAYWRIGHT_HOST_PORT }}/connect"
+APP_HOST = "host.docker.internal"
