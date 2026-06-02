@@ -3,3 +3,4 @@
 .env.local
 config/master.key
 config/credentials/*.key
+.dev/compose.yml
