@@ -72,7 +72,7 @@ _Tip: Set a shell alias for "mise run" to "mr"._
 ### Lifecycle
 
 - `mise run up` (`u`) — start the app (ensures external volumes, brings up the proxy first)
-- `mise run down` — stop and remove the current worktree's containers (keeps volumes); run from a worktree
+- `mise run down` — tear down the current worktree's docker resources including its volumes (keeps the worktree folder and built images); run from a worktree
 - `mise run proxy:up` (`proxy`) — start the shared Traefik proxy
 - `mise run proxy:down` — stop the proxy
 - `mise run proxy:logs` — tail proxy logs
@@ -83,7 +83,7 @@ _Tip: Set a shell alias for "mise run" to "mr"._
 - `mise run wt <branch | PR# | new-branch>` — create a new git worktree with its own mise.local.toml and ports
 - `mise run wt:ls` — list all worktrees
 - `mise run wt:open [browser]` — open the current worktree URL (`xdg-open` by default)
-- `mise run delete` — remove the current worktree: its docker resources, git worktree registration, ports.registry entry, and folder (run from the worktree; refuses on the base; prompts for confirmation)
+- `mise run wt:rm <branch | dir-name>` — fully remove a worktree: its docker resources (containers, volumes, images, networks), git worktree registration, ports.registry entry, and folder (refuses on the base worktree)
 
 ### Development
 
