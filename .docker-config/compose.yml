@@ -52,6 +52,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Remove any stale unix socket before the image entrypoint chowns /data —
+    # chown on a socket file fails with EINVAL on macOS (virtiofs) bind mounts,
+    # which crash-loops redis after an unclean shutdown.
+    entrypoint: ["sh", "-c", "rm -f /data/socket/redis.sock; exec docker-entrypoint.sh \"$@\"", "--"]
     volumes:
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
     networks:
