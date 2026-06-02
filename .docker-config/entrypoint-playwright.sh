@@ -23,6 +23,10 @@ case "$(printf '%s' "${HEADLESS_SYSTEM_TESTS:-0}" | tr '[:upper:]' '[:lower:]')"
   1 | true) HEADLESS_BOOL="true" ;;
 esac
 
+# Clear stale X locks left by an unclean shutdown — the container's /tmp survives
+# restarts, and Xvfb refuses to start while the old lock exists.
+rm -f "/tmp/.X${DISPLAY_NUM}-lock" "/tmp/.X11-unix/X${DISPLAY_NUM}"
+
 # Virtual framebuffer the headed Chromium renders into.
 Xvfb "$DISPLAY" -screen 0 "$SCREEN_GEOMETRY" -nolisten tcp &
 
