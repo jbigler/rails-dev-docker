@@ -235,3 +235,80 @@ run = """
   echo ""
   echo "Done. Your shell may be in a removed directory; run: cd ~"
 """
+
+[tasks.down]
+description = "Stop and remove the current worktree's containers (keeps volumes). Run from a worktree."
+run = "docker compose down"
+
+[tasks.delete]
+description = "Remove the current worktree's docker resources and delete the worktree folder. Use 'destroy' for the whole project."
+run = """
+  set -e
+  prefix="$PROJECT_PREFIX"
+  project="$COMPOSE_PROJECT_NAME"
+  wt="$CURRENT_WORKTREE_NAME"
+  [ -z "$prefix" ] && { echo "PROJECT_PREFIX is unset; refusing to delete" >&2; exit 1; }
+  [ -z "$project" ] && { echo "COMPOSE_PROJECT_NAME is unset; run from a worktree" >&2; exit 1; }
+
+  # Tasks run from config_root, so identify the worktree from its env (set by the
+  # invocation dir), not from $PWD.
+  main="$MAIN_WORKTREE_PATH"
+  [ -z "$main" ] && { echo "MAIN_WORKTREE_PATH unset; run from a worktree" >&2; exit 1; }
+  root=$(dirname "$main")
+  target="$root/$wt"
+  [ -d "$target" ] || { echo "Worktree folder not found: ${target}" >&2; exit 1; }
+
+  # Protect the base/main worktree (the main checkout)
+  if [ "$target" = "$main" ]; then
+    echo "'${wt}' is the base worktree (the main checkout). Use 'mise run destroy' for the whole project." >&2; exit 1
+  fi
+
+  pattern="^${project}[-_]"
+  echo "This will remove:"
+  echo "  - Docker containers/networks/volumes/images matching ${pattern}"
+  echo "  - The worktree folder: ${target}"
+  echo "  - Its git worktree registration and ports.registry entry"
+  printf "Type 'delete' to confirm: "
+  read -r confirm
+  [ "$confirm" = "delete" ] || { echo "Aborted."; exit 1; }
+
+  # Leave the worktree before deleting it
+  cd "$HOME"
+
+  containers=$(docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' | grep -E "$pattern" || true)
+  if [ -n "$containers" ]; then
+    echo "Removing containers:"; echo "$containers" | sed 's/^/  /'
+    echo "$containers" | xargs docker rm -f >/dev/null
+  fi
+
+  networks=$(docker network ls --format '{% raw %}{{.Name}}{% endraw %}' | grep -E "$pattern" || true)
+  if [ -n "$networks" ]; then
+    echo "Removing networks:"; echo "$networks" | sed 's/^/  /'
+    echo "$networks" | xargs docker network rm >/dev/null
+  fi
+
+  volumes=$(docker volume ls --format '{% raw %}{{.Name}}{% endraw %}' | grep -E "$pattern" || true)
+  if [ -n "$volumes" ]; then
+    echo "Removing volumes:"; echo "$volumes" | sed 's/^/  /'
+    echo "$volumes" | xargs docker volume rm >/dev/null
+  fi
+
+  images=$(docker images --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}' | grep -E "$pattern" || true)
+  if [ -n "$images" ]; then
+    echo "Removing images:"; echo "$images" | sed 's/^/  /'
+    echo "$images" | xargs docker rmi -f >/dev/null
+  fi
+
+  # Deregister the git worktree (also removes the folder); fall back to rm -rf
+  git -C "$main" worktree remove --force "$target" 2>/dev/null || rm -rf "$target"
+  git -C "$main" worktree prune 2>/dev/null || true
+
+  # Drop the ports.registry entry for this worktree
+  REGISTRY="${root}/ports.registry"
+  if [ -f "$REGISTRY" ]; then
+    tmp=$(mktemp); grep -v "^${wt}:" "$REGISTRY" > "$tmp" || true; mv "$tmp" "$REGISTRY"
+  fi
+
+  echo ""
+  echo "Deleted worktree '${wt}'. Your shell may be in a removed directory; run: cd ~"
+"""
