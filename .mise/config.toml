@@ -245,3 +245,8 @@ run = """
 [tasks.down]
 description = "Tear down the current worktree's docker resources, including its volumes (keeps the worktree folder and built images). Run from a worktree."
 run = "docker compose down --volumes --remove-orphans"
+
+[tasks.stop]
+description = "Stop the current worktree's containers without removing them or their volumes (unlike 'down'). Resume with 'mise run up'. Leaves the shared proxy running. Run from a worktree."
+run = "docker compose stop"
+alias = "s"
