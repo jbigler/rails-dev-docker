@@ -38,6 +38,24 @@ if [ -d "${worktree_dir}/.git" ]; then
   exit 1
 fi
 
+# Refuse to remove a worktree with uncommitted or unstaged changes —
+# removal is destructive (rm -rf) and would lose that work. The user can
+# override with FORCE=1 if they really want to discard the changes.
+dirty=$(git -C "$worktree_dir" status --porcelain 2>/dev/null || true)
+if [ -n "$dirty" ]; then
+  if [ "${FORCE:-}" = "1" ]; then
+    echo "Warning: ${clean_name} has uncommitted or unstaged changes — discarding them (FORCE=1):"
+    git -C "$worktree_dir" status --short
+  else
+    echo "Error: Refusing to remove '${clean_name}' — it has uncommitted or unstaged changes:" >&2
+    echo "" >&2
+    git -C "$worktree_dir" status --short >&2
+    echo "" >&2
+    echo "Commit or stash them first, or re-run with FORCE=1 to discard them." >&2
+    exit 1
+  fi
+fi
+
 # Determine compose project name (mirrors mise.local.toml.template)
 project_prefix="${PROJECT_PREFIX:-default}"
 project_name="${project_prefix}-${clean_name}"
