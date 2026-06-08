@@ -41,18 +41,14 @@ else
   echo "Moved checkout to $dest; backward symlink left at $app_path"
 fi
 
-# --- Detect development DB name (best-effort; fallback to <prefix>_development) ---
-dev_db="$(awk '/^[[:space:]]*development:/{f=1} f&&/database:/{sub(/.*database:[[:space:]]*/,"");gsub(/["'"'"' ]/,"");print;exit}' "$dest/config/database.yml" 2>/dev/null || true)"
-case "$dev_db" in ''|*'<%'*|*'ENV'*) dev_db="${prefix}_development" ;; esac
-echo "Using DEV_DB_NAME=$dev_db"
-
 # --- Root mise.local.toml (git-ignored) ---
+# DEV_DB_NAME is intentionally omitted: each worktree's mise.local.toml derives
+# it from config/database.yml (see .mise/local.toml.template).
 cat > "$root/mise.local.toml" <<EOF
 [env]
 PROJECT_PREFIX = "$prefix"
 GEM_VOLUME_BASE = "${prefix}_shared_gems"
 NODE_MODULES_VOLUME = "${prefix}_shared_node_modules"
-DEV_DB_NAME = "$dev_db"
 NVIM_CONFIG_DIR = "$HOME/.config/nvim"
 EOF
 echo "Wrote $root/mise.local.toml"

@@ -152,7 +152,7 @@ description = "Dump the development database and RustFS data for faster containe
 run = """
   DUMP_DIR="{{ config_root }}/.docker-config/db-dumps"
   mkdir -p "$DUMP_DIR"
-  : "${DEV_DB_NAME:?DEV_DB_NAME is unset — set it in mise.local.toml}"
+  : "${DEV_DB_NAME:?DEV_DB_NAME is empty — could not parse it from config/database.yml; set it manually in mise.local.toml}"
   docker compose exec -T db pg_dump -Fc -U postgres "$DEV_DB_NAME" \
     > "$DUMP_DIR/$DEV_DB_NAME.dump"
   echo "DB dump saved."

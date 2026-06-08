@@ -29,6 +29,11 @@ PGPORT = "{{ env.DB_PORT }}"
 PGUSER = "postgres"
 PGPASSWORD = "password"
 
+# Development database name, parsed from this worktree's config/database.yml
+# (postgres only) so db:dump and the initdb dump-restore need no manual setup.
+# Resolves to empty for a dynamic ERB/ENV database value — set DEV_DB_NAME by
+# hand in this file if that happens.
+DEV_DB_NAME = "{{ exec(command='../.scripts/dev-db-name.sh config/database.yml') | trim }}"
 # Host → containerized Playwright browser server (published per worktree by the
 # playwright service), so system tests run ON THE HOST connect to this worktree's
 # in-container browser. APP_HOST is how that browser navigates back to the
