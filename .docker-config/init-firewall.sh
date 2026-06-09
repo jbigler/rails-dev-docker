@@ -81,6 +81,7 @@ fi
 # Resolve and add other allowed domains
 for domain in \
     "registry.npmjs.org" \
+    "codeload.github.com" \
     "claude.ai" \
     "api.anthropic.com" \
     "sentry.io" \
