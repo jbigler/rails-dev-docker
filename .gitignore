@@ -1,6 +1,9 @@
 # Ignore everything by default
 /*
 
+# Include repo docs
+!/AGENTS.md
+
 # Include the docker-config directory and its contents (except for the home and db-dumps directories)
 !/.docker-config/
 /.docker-config/home/*
