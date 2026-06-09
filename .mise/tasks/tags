@@ -1,0 +1,95 @@
+#!/bin/sh
+# .mise/tasks/tags
+# description: Generate the master ctags for the parent project root.
+
+# 1. Get the absolute path of this script file itself
+SCRIPT_PATH=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)
+SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+
+# 2. Move up two levels to go from '.mise/tasks/' to the actual project root
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+
+# 3. Force the script to change directory into the actual project root
+cd "$PROJECT_ROOT" || exit 1
+
+# 4. Force mise to explicitly dump and load the project-specific environment
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise env)"
+fi
+
+# =====================================================================
+# Everything below now executes safely from the true project root folder
+# =====================================================================
+
+# 5. Resolve the Ruby install that actually owns the project's gemset.
+#    The global mise ruby may be pinned to "latest" with an essentially
+#    empty gemset, while the gems (and ripper-tags) were provisioned into a
+#    different, project-specific Ruby below this orchestration root. We treat
+#    the Ruby that has ripper-tags installed as the source of truth and derive
+#    the stdlib + gem directories from it, rather than from whatever Ruby
+#    happens to be active here.
+ACTIVE_RUBY_DIR=$(mise where ruby 2>/dev/null)
+
+# Prefer the active Ruby if it has ripper-tags; otherwise scan every installed
+# mise Ruby for the ripper-tags binary and use the first one that has it.
+RIPPER_PATH=""
+if [ -n "$ACTIVE_RUBY_DIR" ] && [ -x "$ACTIVE_RUBY_DIR/bin/ripper-tags" ]; then
+  RIPPER_PATH="$ACTIVE_RUBY_DIR/bin/ripper-tags"
+elif command -v ripper-tags >/dev/null 2>&1; then
+  RIPPER_PATH=$(command -v ripper-tags)
+else
+  for candidate in "$(dirname "${ACTIVE_RUBY_DIR:-$HOME/.local/share/mise/installs/ruby/_}")"/*/bin/ripper-tags; do
+    [ -x "$candidate" ] && { RIPPER_PATH="$candidate"; break; }
+  done
+fi
+
+if [ -z "$RIPPER_PATH" ]; then
+  echo "❌ Error: 'ripper-tags' is not installed in any mise Ruby."
+  echo "   Install it into the Ruby that holds the project gems, e.g.:"
+  echo "     mise exec ruby -- gem install ripper-tags"
+  exit 1
+fi
+
+# Derive the Ruby (stdlib) and gem directories from the SAME Ruby that owns
+# ripper-tags so the tagged sources are internally consistent:
+#   <ruby_install>/bin/ripper-tags -> <ruby_install>
+RUBY_DIR=$(cd "$(dirname "$RIPPER_PATH")/.." && pwd)
+
+# 6. Resolve the parent (base) worktree's project directory. The shared
+#    `.git` common dir always lives inside the base worktree, so its parent is
+#    the base worktree root no matter which worktree this task runs from. This
+#    is the canonical home for the single master tags file.
+COMMON_GIT_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" && pwd)
+PARENT_WORKTREE_ROOT=$(dirname "$COMMON_GIT_DIR")
+CURRENT_DIR=$(pwd)
+
+# 7. Always write the tags into the parent worktree's project directory.
+#    When invoked from a secondary worktree we redirect there rather than
+#    aborting, so the tags file never lands in a linked worktree.
+if [ "$CURRENT_DIR" != "$PARENT_WORKTREE_ROOT" ]; then
+  echo "ℹ️  Invoked from a secondary worktree ($CURRENT_DIR)."
+  echo "   Writing the master tags file to the parent worktree: $PARENT_WORKTREE_ROOT"
+fi
+
+echo "📦 Locating Ruby and Gem dependencies..."
+
+# 8. Ask the resolved Ruby for its gemdir directly. We avoid `bundle exec`
+#    here: on the host there is no installed bundle (the app bundle lives in
+#    Docker), so `bundle exec` fails with "Could not locate Gemfile". The
+#    plain gemdir of the provisioned Ruby is exactly the gemset we want to tag.
+GEM_DIR=$("$RUBY_DIR/bin/gem" env gemdir 2>/dev/null)
+
+if [ -z "$RUBY_DIR" ] || [ -z "$GEM_DIR" ]; then
+  echo "❌ Error: Could not determine Ruby ($RUBY_DIR) or Gem ($GEM_DIR) directories."
+  exit 1
+fi
+
+echo "🚀 Generating master tags file in the parent worktree..."
+echo "   Ruby:   $RUBY_DIR"
+echo "   Gems:   $GEM_DIR/gems"
+echo "   Output: $PARENT_WORKTREE_ROOT/tags"
+# -R recurses into directories, so pass the gems dir itself (a quoted glob like
+# "$GEM_DIR/gems/*" would never expand and would be a non-existent literal path).
+"$RIPPER_PATH" -R -f "$PARENT_WORKTREE_ROOT/tags" "$RUBY_DIR" "$GEM_DIR/gems"
+
+echo "✅ Master tags file successfully generated at: $PARENT_WORKTREE_ROOT/tags"
