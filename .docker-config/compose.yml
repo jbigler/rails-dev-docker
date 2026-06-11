@@ -55,7 +55,13 @@ services:
     # Remove any stale unix socket before the image entrypoint chowns /data —
     # chown on a socket file fails with EINVAL on macOS (virtiofs) bind mounts,
     # which crash-loops redis after an unclean shutdown.
-    entrypoint: ["sh", "-c", "rm -f /data/socket/redis.sock; exec docker-entrypoint.sh \"$@\"", "--"]
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        'rm -f /data/socket/redis.sock; exec docker-entrypoint.sh "$@"',
+        "--",
+      ]
     volumes:
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
     networks:
@@ -124,6 +130,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+      start_period: 30s
 
   nvim:
     build:
