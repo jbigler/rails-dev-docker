@@ -18,4 +18,6 @@ if [ $# -eq 0 ] || [ "${1#-}" != "$1" ]; then
   exec claude --dangerously-skip-permissions "$@"
 fi
 
+ln -s /usr/bin/claude /home/appuser/.local/bin/claude
+
 exec "$@"
