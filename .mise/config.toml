@@ -174,11 +174,15 @@ run = """
 
 [tasks.claude]
 description = "Run Claude AI assistant. Opens in a new Kitty tab if running inside Kitty, otherwise runs in the current terminal."
+usage = 'arg "[args]…" var=#true default=""'
 run = """
+  args="${usage_args:-}"
+  [ "$args" = "''" ] && args=
+  set -- $args
   if [ -n "${KITTY_PID:-}" ] && command -v kitty >/dev/null 2>&1; then
-    kitty @ launch --type=tab --cwd=current --tab-title=Claude --copy-env=yes -- docker compose run --rm claude
+    kitty @ launch --type=tab --cwd=current --tab-title=Claude --copy-env=yes -- docker compose run --rm claude "$@"
   else
-    docker compose run --rm claude
+    docker compose run --rm claude "$@"
   fi
 """
 alias = "ai"
