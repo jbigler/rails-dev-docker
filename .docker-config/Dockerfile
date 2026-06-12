@@ -196,6 +196,7 @@ RUN apt-get update -qq && \
   aggregate \
   jq \
   nano \
+  socat \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN (type -p wget >/dev/null || ( apt update && apt-get install wget -y)) \

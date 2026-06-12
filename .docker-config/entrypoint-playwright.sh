@@ -43,6 +43,40 @@ x11vnc -display "$DISPLAY" -forever -shared -nopw -quiet -rfbport "$VNC_RFB_PORT
 # Serve the noVNC web client and bridge its websocket to the VNC port.
 websockify --web=/usr/share/novnc "$VNC_WEB_PORT" "localhost:${VNC_RFB_PORT}" &
 
+# Interactive Chromium for the claude container's chrome-devtools MCP server.
+# Launched headed into the same Xvfb display as the test browser, so it is visible
+# (and clickable) on the same noVNC page. It exposes CDP on $CDP_PORT, which headed
+# Chrome binds to loopback only — socat republishes it on $CDP_PUBLIC_PORT for other
+# containers. This instance is independent of the launchServer browser below: tests
+# and the MCP session never share pages or fight over contexts.
+CDP_PORT="${CDP_PORT:-9222}"
+CDP_PUBLIC_PORT="${CDP_PUBLIC_PORT:-9223}"
+CHROME_PROFILE_DIR="${CHROME_PROFILE_DIR:-/tmp/claude-chrome-profile}"
+CHROME_BIN="$(node -e 'console.log(require("/usr/lib/node_modules/playwright-core").chromium.executablePath())')"
+
+# Clear stale singleton locks left by an unclean shutdown (same reason as the X locks).
+rm -f "${CHROME_PROFILE_DIR}/SingletonLock" "${CHROME_PROFILE_DIR}/SingletonSocket" "${CHROME_PROFILE_DIR}/SingletonCookie"
+
+# Restart loop: an MCP client can legitimately close the browser (Browser.close);
+# relaunch so the endpoint comes back without a container restart.
+(
+  while true; do
+    "$CHROME_BIN" \
+      --no-sandbox \
+      --no-first-run \
+      --no-default-browser-check \
+      --hide-crash-restore-bubble \
+      --user-data-dir="$CHROME_PROFILE_DIR" \
+      --remote-debugging-port="$CDP_PORT" \
+      --window-position=0,0 \
+      --window-size=1600,950 \
+      about:blank >/dev/null 2>&1 || true
+    sleep 1
+  done
+) &
+
+socat TCP-LISTEN:"$CDP_PUBLIC_PORT",fork,reuseaddr TCP:127.0.0.1:"$CDP_PORT" &
+
 # Host the browser server. The browser is launched into $DISPLAY when a client connects;
 # clients reach it at ws://playwright:${PLAYWRIGHT_PORT}/connect (see PLAYWRIGHT_HOST).
 exec node -e '

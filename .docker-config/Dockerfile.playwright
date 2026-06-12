@@ -16,7 +16,8 @@ RUN apt-get update -qq && \
   x11vnc \
   novnc \
   websockify \
-  x11-utils && \
+  x11-utils \
+  socat && \
   rm -rf /var/lib/apt/lists/*
 
 # playwright-core provides chromium.launchServer (used by the entrypoint to host a
@@ -25,6 +26,7 @@ RUN apt-get update -qq && \
 RUN npm install -g playwright-core@1.59.0
 
 # 8888: Playwright server (clients connect here)   8080: noVNC web viewer
-EXPOSE 8888 8080
+# 9223: CDP endpoint of the interactive Chromium (socat republish of loopback 9222)
+EXPOSE 8888 8080 9223
 
 # entrypoint-playwright.sh is mounted in via compose, mirroring the entrypoint-app.sh pattern.
