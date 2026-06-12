@@ -184,8 +184,12 @@ services:
       - "${WORKTREE_HOST}:host-gateway"
       - "${S3_HOST}:host-gateway"
       - "${RUSTFS_UI_HOST}:host-gateway"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     volumes:
       - ../.docker-config/entrypoint-playwright.sh:/usr/local/bin/entrypoint-playwright.sh:ro
+      - ../.docker-config/init-firewall-playwright.sh:/usr/local/bin/init-firewall-playwright.sh:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-vnc.rule=Host(`vnc.${WORKTREE_HOST}`)"

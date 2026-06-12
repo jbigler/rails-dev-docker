@@ -17,7 +17,8 @@ RUN apt-get update -qq && \
   novnc \
   websockify \
   x11-utils \
-  socat && \
+  socat \
+  iptables && \
   rm -rf /var/lib/apt/lists/*
 
 # playwright-core provides chromium.launchServer (used by the entrypoint to host a

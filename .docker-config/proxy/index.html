@@ -1,156 +1,184 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<base target="_blank">
-<title>Worktrees</title>
-<style>
-  :root {
-    color-scheme: light dark;
-    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  }
-  body {
-    max-width: 720px;
-    margin: 2rem auto;
-    padding: 0 1rem;
-    line-height: 1.5;
-  }
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 1.5rem;
-  }
-  h1 {
-    font-size: 1.25rem;
-    margin: 0;
-    opacity: 0.7;
-    font-weight: 500;
-  }
-  .status {
-    font-size: 0.75rem;
-    opacity: 0.5;
-    font-family: ui-monospace, monospace;
-  }
-  .worktree {
-    border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-    border-radius: 8px;
-    padding: 0.875rem 1rem;
-    margin-bottom: 0.625rem;
-  }
-  .worktree h2 {
-    margin: 0 0 0.5rem;
-    font-size: 0.95rem;
-    font-family: ui-monospace, SFMono-Regular, monospace;
-    font-weight: 500;
-  }
-  .links {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .links a {
-    padding: 0.25rem 0.75rem;
-    border-radius: 6px;
-    background: color-mix(in srgb, currentColor 8%, transparent);
-    text-decoration: none;
-    font-size: 0.8125rem;
-    color: inherit;
-    transition: background 0.1s;
-  }
-  .links a:hover {
-    background: color-mix(in srgb, currentColor 18%, transparent);
-  }
-  .links a.primary {
-    background: color-mix(in srgb, CanvasText 85%, transparent);
-    color: Canvas;
-  }
-  .links a.primary:hover {
-    background: CanvasText;
-  }
-  .empty {
-    opacity: 0.55;
-    text-align: center;
-    padding: 3rem 1rem;
-    font-style: italic;
-  }
-</style>
-</head>
-<body>
-<header>
-  <h1>Worktrees</h1>
-  <div class="status" id="status"></div>
-</header>
-<div id="worktrees"></div>
-<script>
-const LABELS = { app: "app", email: "email", lookbook: "lookbook", routes: "routes", vnc: "system tests", "s3 console": "s3 console" };
-const ORDER = ["app", "email", "lookbook", "routes", "vnc", "s3 console"];
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base target="_blank" />
+    <title>Worktrees</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      body {
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 1.5rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0;
+        opacity: 0.7;
+        font-weight: 500;
+      }
+      .status {
+        font-size: 0.75rem;
+        opacity: 0.5;
+        font-family: ui-monospace, monospace;
+      }
+      .worktree {
+        border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+        border-radius: 8px;
+        padding: 0.875rem 1rem;
+        margin-bottom: 0.625rem;
+      }
+      .worktree h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-weight: 500;
+      }
+      .links {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .links a {
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        background: color-mix(in srgb, currentColor 8%, transparent);
+        text-decoration: none;
+        font-size: 0.8125rem;
+        color: inherit;
+        transition: background 0.1s;
+      }
+      .links a:hover {
+        background: color-mix(in srgb, currentColor 18%, transparent);
+      }
+      .links a.primary {
+        background: color-mix(in srgb, CanvasText 85%, transparent);
+        color: Canvas;
+      }
+      .links a.primary:hover {
+        background: CanvasText;
+      }
+      .empty {
+        opacity: 0.55;
+        text-align: center;
+        padding: 3rem 1rem;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Worktrees</h1>
+      <div class="status" id="status"></div>
+    </header>
+    <div id="worktrees"></div>
+    <script>
+      const LABELS = {
+        app: "app",
+        email: "email",
+        lookbook: "lookbook",
+        routes: "routes",
+        vnc: "vnc chrome",
+        "s3 console": "s3 console",
+      };
+      const ORDER = ["app", "email", "lookbook", "routes", "vnc", "s3 console"];
 
-function extractHost(rule) {
-  const m = rule.match(/Host\(`([^`]+)`\)/);
-  return m ? m[1] : null;
-}
+      function extractHost(rule) {
+        const m = rule.match(/Host\(`([^`]+)`\)/);
+        return m ? m[1] : null;
+      }
 
-function classify(host) {
-  if (host.startsWith("s3-ui.")) return { name: host.slice(6).replace(/\.localhost$/, ""), kind: "s3 console" };
-  if (host.startsWith("s3.")) return null;
-  if (host.startsWith("vnc.")) return { name: host.slice(4).replace(/\.localhost$/, ""), kind: "vnc" };
-  if (host === "wt.localhost") return null;
-  return { name: host.replace(/\.localhost$/, ""), kind: "app" };
-}
+      function classify(host) {
+        if (host.startsWith("s3-ui."))
+          return {
+            name: host.slice(6).replace(/\.localhost$/, ""),
+            kind: "s3 console",
+          };
+        if (host.startsWith("s3.")) return null;
+        if (host.startsWith("vnc."))
+          return {
+            name: host.slice(4).replace(/\.localhost$/, ""),
+            kind: "vnc",
+          };
+        if (host === "wt.localhost") return null;
+        return { name: host.replace(/\.localhost$/, ""), kind: "app" };
+      }
 
-async function load() {
-  const status = document.getElementById("status");
-  const container = document.getElementById("worktrees");
-  let routers;
-  try {
-    routers = await fetch("/api/http/routers").then(r => r.json());
-  } catch (e) {
-    container.innerHTML = `<div class="empty">Failed to load: ${e.message}</div>`;
-    return;
-  }
+      async function load() {
+        const status = document.getElementById("status");
+        const container = document.getElementById("worktrees");
+        let routers;
+        try {
+          routers = await fetch("/api/http/routers").then((r) => r.json());
+        } catch (e) {
+          container.innerHTML = `<div class="empty">Failed to load: ${e.message}</div>`;
+          return;
+        }
 
-  const worktrees = {};
-  for (const r of routers) {
-    if (r.provider !== "docker") continue;
-    if (r.status !== "enabled") continue;
-    const host = extractHost(r.rule);
-    if (!host) continue;
-    const c = classify(host);
-    if (!c) continue;
-    if (!worktrees[c.name]) worktrees[c.name] = {};
-    if (c.kind === "vnc") {
-      // Separate host served by the playwright container's noVNC bridge; deep-link
-      // straight into the viewer so the browser shows the live test run.
-      worktrees[c.name].vnc = `http://${host}/vnc.html?path=websockify&autoconnect=1&reconnect=1&reconnect_delay=2000&resize=scale`;
-    } else {
-      worktrees[c.name][c.kind] = `http://${host}`;
-    }
-    if (c.kind === "app") {
-      worktrees[c.name].email = `http://${host}/letter_opener`;
-      worktrees[c.name].lookbook = `http://${host}/lookbook`;
-      worktrees[c.name].routes = `http://${host}/rails/info/routes`;
-    }
-  }
+        const worktrees = {};
+        for (const r of routers) {
+          if (r.provider !== "docker") continue;
+          if (r.status !== "enabled") continue;
+          const host = extractHost(r.rule);
+          if (!host) continue;
+          const c = classify(host);
+          if (!c) continue;
+          if (!worktrees[c.name]) worktrees[c.name] = {};
+          if (c.kind === "vnc") {
+            // Separate host served by the playwright container's noVNC bridge; deep-link
+            // straight into the viewer so the browser shows the live test run.
+            worktrees[c.name].vnc =
+              `http://${host}/vnc.html?path=websockify&autoconnect=1&reconnect=1&reconnect_delay=2000&resize=scale`;
+          } else {
+            worktrees[c.name][c.kind] = `http://${host}`;
+          }
+          if (c.kind === "app") {
+            worktrees[c.name].email = `http://${host}/letter_opener`;
+            worktrees[c.name].lookbook = `http://${host}/lookbook`;
+            worktrees[c.name].routes = `http://${host}/rails/info/routes`;
+          }
+        }
 
-  const sorted = Object.entries(worktrees).sort(([a], [b]) => a.localeCompare(b));
-  if (sorted.length === 0) {
-    container.innerHTML = '<div class="empty">No worktrees running. Start one with <code>mise run up</code>.</div>';
-  } else {
-    container.innerHTML = sorted.map(([name, urls]) => {
-      const links = ORDER.filter(k => urls[k]).map((k, i) =>
-        `<a href="${urls[k]}" class="${i === 0 ? "primary" : ""}">${LABELS[k]}</a>`
-      ).join("");
-      return `<div class="worktree"><h2>${name}</h2><div class="links">${links}</div></div>`;
-    }).join("");
-  }
+        const sorted = Object.entries(worktrees).sort(([a], [b]) =>
+          a.localeCompare(b),
+        );
+        if (sorted.length === 0) {
+          container.innerHTML =
+            '<div class="empty">No worktrees running. Start one with <code>mise run up</code>.</div>';
+        } else {
+          container.innerHTML = sorted
+            .map(([name, urls]) => {
+              const links = ORDER.filter((k) => urls[k])
+                .map(
+                  (k, i) =>
+                    `<a href="${urls[k]}" class="${i === 0 ? "primary" : ""}">${LABELS[k]}</a>`,
+                )
+                .join("");
+              return `<div class="worktree"><h2>${name}</h2><div class="links">${links}</div></div>`;
+            })
+            .join("");
+        }
 
-  status.textContent = new Date().toLocaleTimeString();
-}
+        status.textContent = new Date().toLocaleTimeString();
+      }
 
-load();
-setInterval(load, 5000);
-</script>
-</body>
+      load();
+      setInterval(load, 5000);
+    </script>
+  </body>
 </html>

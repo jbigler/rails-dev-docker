@@ -56,7 +56,9 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 - playwright — Dockerfile.playwright; run chromium.launchServer (headed via Xvfb + x11vnc+noVNC);  
   HEADLESS_SYSTEM_TESTS=1 for headless. server-side logic decides mode. Publish  
   127.0.0.1:${PLAYWRIGHT_HOST_PORT}:8888. Also run second interactive Chromium (always headed, same  
-  display → same VNC page) with CDP :9222 loopback, socat republish :9223 for claude chrome-devtools MCP.
+  display → same VNC page) with CDP :9222 loopback, socat republish :9223 for claude chrome-devtools MCP.  
+  Egress firewalled (init-firewall-playwright.sh, NET_ADMIN): loopback + RFC1918 only — browser can't  
+  reach internet (else it bypasses claude's firewall).
 - rustfs — S3 storage, Traefik-routed.
 - claude — claude target, profile do_not_start; NET_ADMIN/NET_RAW; entrypoint: init-firewall.sh, add MCP  
   (pencil; chrome-devtools via socat loopback bridge 127.0.0.1:9222→playwright:9223 — CDP rejects  

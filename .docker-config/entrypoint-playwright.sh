@@ -9,6 +9,9 @@
 # Set HEADLESS_SYSTEM_TESTS=1 to launch headless instead (faster, nothing to view).
 set -euo pipefail
 
+# Lock down egress before anything network-facing starts (entrypoint runs as root).
+/usr/local/bin/init-firewall-playwright.sh
+
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
 export DISPLAY=":${DISPLAY_NUM}"
 SCREEN_GEOMETRY="${SCREEN_GEOMETRY:-1600x1000x24}"
@@ -52,10 +55,19 @@ websockify --web=/usr/share/novnc "$VNC_WEB_PORT" "localhost:${VNC_RFB_PORT}" &
 CDP_PORT="${CDP_PORT:-9222}"
 CDP_PUBLIC_PORT="${CDP_PUBLIC_PORT:-9223}"
 CHROME_PROFILE_DIR="${CHROME_PROFILE_DIR:-/tmp/claude-chrome-profile}"
+# Rails dev only authorizes hosts in DOMAIN/DEV_HOSTS; "app" is allowed via DEV_HOSTS.
+CHROME_START_URL="${CHROME_START_URL:-http://app:3000}"
 CHROME_BIN="$(node -e 'console.log(require("/usr/lib/node_modules/playwright-core").chromium.executablePath())')"
 
 # Clear stale singleton locks left by an unclean shutdown (same reason as the X locks).
 rm -f "${CHROME_PROFILE_DIR}/SingletonLock" "${CHROME_PROFILE_DIR}/SingletonSocket" "${CHROME_PROFILE_DIR}/SingletonCookie"
+
+# Throwaway profile: reset prefs every boot to keep the password manager (and its
+# "save password" bubble) off — there is no flag for this, only profile preferences.
+mkdir -p "${CHROME_PROFILE_DIR}/Default"
+cat > "${CHROME_PROFILE_DIR}/Default/Preferences" <<'PREFS'
+{"credentials_enable_service":false,"profile":{"password_manager_enabled":false,"password_manager_leak_detection":false}}
+PREFS
 
 # Restart loop: an MCP client can legitimately close the browser (Browser.close);
 # relaunch so the endpoint comes back without a container restart.
@@ -68,9 +80,10 @@ rm -f "${CHROME_PROFILE_DIR}/SingletonLock" "${CHROME_PROFILE_DIR}/SingletonSock
       --hide-crash-restore-bubble \
       --user-data-dir="$CHROME_PROFILE_DIR" \
       --remote-debugging-port="$CDP_PORT" \
+      --password-store=basic \
       --window-position=0,0 \
       --window-size=1600,950 \
-      about:blank >/dev/null 2>&1 || true
+      "$CHROME_START_URL" >/dev/null 2>&1 || true
     sleep 1
   done
 ) &
