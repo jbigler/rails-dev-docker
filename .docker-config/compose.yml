@@ -263,6 +263,7 @@ services:
         GIT_DELTA_VERSION: "0.18.2"
     volumes:
       - ../.docker-config/home:/home/appuser
+      - ../.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro
       - claude_bashhistory:/commandhistory
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git

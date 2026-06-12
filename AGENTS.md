@@ -62,7 +62,10 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 - rustfs — S3 storage, Traefik-routed.
 - claude — claude target, profile do_not_start; NET_ADMIN/NET_RAW; entrypoint: init-firewall.sh, add MCP  
   (pencil; chrome-devtools via socat loopback bridge 127.0.0.1:9222→playwright:9223 — CDP rejects  
-  non-localhost Host header), rtk init, then claude --dangerously-skip-permissions.
+  non-localhost Host header), rtk init, then claude --dangerously-skip-permissions.  
+  Global memory: committed .docker-config/CLAUDE.md mounted ro → /home/appuser/.claude/CLAUDE.md  
+  (browser/MCP + rtk instructions); imports optional CLAUDE.local.md (gitignored home/.claude/) for  
+  user-local instructions.
 
 Volumes shared_gems, shared_node_modules, claude_config, claude_bashhistory are external. Networks: dev (bridge,  
 MTU 1400) + proxy (external, ${PROJECT_PREFIX}\_proxy).

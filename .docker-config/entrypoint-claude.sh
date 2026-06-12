@@ -19,7 +19,13 @@ socat TCP-LISTEN:9222,bind=127.0.0.1,fork,reuseaddr TCP:playwright:9223 >/dev/nu
 claude mcp remove chrome-devtools -s user 2>/dev/null || true
 claude mcp add -s user chrome-devtools -- npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222 2>/dev/null || true
 
-# Initialize RTK
+# Refresh global memory from the committed copy (.docker-config/CLAUDE.md).
+# Plain copy, not a bind mount at this path: rtk init rewrites CLAUDE.md via
+# temp-file + rename, which fails on a file that is itself a mount point.
+cp /opt/claude/CLAUDE.md /home/appuser/.claude/CLAUDE.md
+
+# Initialize RTK (also regenerates ~/.claude/RTK.md and re-adds the @RTK.md
+# reference to the fresh CLAUDE.md copy)
 rtk init -g --auto-patch
 
 # If first arg starts with '-' or no args given, run claude with skip-permissions
