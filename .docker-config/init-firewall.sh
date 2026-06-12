@@ -82,6 +82,7 @@ fi
 for domain in \
     "registry.npmjs.org" \
     "codeload.github.com" \
+    "api.githubcopilot.com" \
     "claude.ai" \
     "api.anthropic.com" \
     "sentry.io" \
