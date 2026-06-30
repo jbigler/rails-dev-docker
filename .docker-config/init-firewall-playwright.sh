@@ -26,6 +26,28 @@ for net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
   iptables -A OUTPUT -d "$net" -j ACCEPT
 done
 
+# Allow outbound HTTPS to the JS CDNs the Rails importmap pins load from
+# (ga.jspm.io: sortablejs/stimulus-sortable; cdn.jsdelivr.net: pdfjs-dist).
+# The browser fetches these modules when rendering app pages, so its egress
+# must reach them. No dig here (no dnsutils), so resolve via getent and pin
+# the resolved IPv4s on 443. CDN IPs rotate; re-run this script if a fetch
+# starts failing.
+for domain in \
+  "ga.jspm.io" \
+  "cdn.jsdelivr.net"; do
+  echo "Resolving $domain..."
+  ips=$(getent ahosts "$domain" | awk '/STREAM/ && $1 ~ /^[0-9.]+$/ {print $1}' | sort -u || true)
+  if [ -z "$ips" ]; then
+    echo "WARN: Failed to resolve $domain, skipping"
+    continue
+  fi
+  while read -r ip; do
+    [ -z "$ip" ] && continue
+    echo "Allowing $ip:443 for $domain"
+    iptables -A OUTPUT -d "$ip" -p tcp --dport 443 -j ACCEPT
+  done < <(echo "$ips")
+done
+
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
 iptables -P OUTPUT DROP
