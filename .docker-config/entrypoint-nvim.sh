@@ -5,6 +5,7 @@ mkdir -p ~/.config
 mkdir -p ~/.local
 
 npm install -g mcp-hub@latest
+npm install -g @herb-tools/language-server
 
 export GIT_TERMINAL_PROMPT=0
 
