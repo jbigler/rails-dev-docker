@@ -109,7 +109,9 @@ noVNC; watch at http://vnc.<worktree>.localhost.
   decided server-side via chromium.launchServer.
 - HEADLESS_SYSTEM_TESTS drives both paths: container launchServer (env) and client headless option (local).
 - PLAYWRIGHT_HOST (.docker-config/.env) = ws://playwright:8888/connect; /connect matches entrypoint launchServer.
-- Keep Playwright version sync across image, packages, gems.
+- Playwright version derived per worktree from Gemfile.lock (playwright-version.sh → PLAYWRIGHT_VERSION →  
+  image tag v<ver>-noble + npm playwright-core). Gem bump → next `up` builds the matching image. `up` warns  
+  when PLAYWRIGHT_VERSION is empty (stale mise.local.toml).
 - Infra changes require build & up for playwright.
 
 ## Conventions

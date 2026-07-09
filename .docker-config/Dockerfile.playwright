@@ -6,9 +6,12 @@
 # via browser_server_endpoint_url) launch Chromium into an Xvfb display, exposed as a
 # web page via x11vnc + noVNC so test runs can be watched live in the browser.
 #
-# Keep this tag in lockstep with playwright-ruby-client / playwright-chromium (1.59.0).
+# PLAYWRIGHT_VERSION is derived per worktree from Gemfile.lock's
+# playwright-ruby-client (.scripts/playwright-version.sh → mise env → compose
+# build arg), keeping image, playwright-core, and gem in lockstep automatically.
 # The Ruby client refuses to connect to a server running a different Playwright version.
-FROM mcr.microsoft.com/playwright:v1.59.0-noble
+ARG PLAYWRIGHT_VERSION=1.60.0
+FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 RUN apt-get update -qq && \
   apt-get install --no-install-recommends -y \
@@ -23,8 +26,9 @@ RUN apt-get update -qq && \
 
 # playwright-core provides chromium.launchServer (used by the entrypoint to host a
 # headed browser). -core has no browser-download postinstall; the browsers are already
-# baked into this image at $PLAYWRIGHT_BROWSERS_PATH. Keep the version == the image tag.
-RUN npm install -g playwright-core@1.59.0
+# baked into this image at $PLAYWRIGHT_BROWSERS_PATH. Version == the image tag.
+ARG PLAYWRIGHT_VERSION
+RUN npm install -g playwright-core@${PLAYWRIGHT_VERSION}
 
 # 8888: Playwright server (clients connect here)   8080: noVNC web viewer
 # 9223: CDP endpoint of the interactive Chromium (socat republish of loopback 9222)

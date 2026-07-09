@@ -34,6 +34,11 @@ PGPASSWORD = "password"
 # Resolves to empty for a dynamic ERB/ENV database value — set DEV_DB_NAME by
 # hand in this file if that happens.
 DEV_DB_NAME = "{{ exec(command='../.scripts/dev-db-name.sh config/database.yml') | trim }}"
+# Playwright version pinned by this worktree's Gemfile.lock (playwright-ruby-client
+# tracks upstream Playwright). Drives the browser-server image tag and the npm
+# playwright-core version; empty when unresolvable → compose falls back to its
+# default tag (and `mise run up` warns).
+PLAYWRIGHT_VERSION = "{{ exec(command='../.scripts/playwright-version.sh Gemfile.lock') | trim }}"
 # Host → containerized Playwright browser server (published per worktree by the
 # playwright service), so system tests run ON THE HOST connect to this worktree's
 # in-container browser. APP_HOST is how that browser navigates back to the

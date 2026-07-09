@@ -174,10 +174,14 @@ services:
     command: ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
 
   playwright:
-    image: ${PROJECT_PREFIX}/playwright:latest
+    # Tag keyed by the Playwright version this worktree's Gemfile.lock pins —
+    # a gem bump rebuilds the matching server image on the next `up`.
+    image: ${PROJECT_PREFIX}/playwright:v${PLAYWRIGHT_VERSION:-1.60.0}
     build:
       context: .
       dockerfile: Dockerfile.playwright
+      args:
+        PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.60.0}
     shm_size: "1gb"
     ipc: host
     init: true

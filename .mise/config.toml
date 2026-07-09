@@ -93,14 +93,12 @@ run = """
   for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done
-  # Warn when the Playwright gem drifts from the browser-server image — the
-  # Ruby client can refuse to connect across versions (a cryptic failure).
-  # (grep with [.] classes, not sed: backslashes are TOML escapes here.)
-  img_ver=$(grep -oE 'FROM mcr.microsoft.com/playwright:v[0-9]+[.][0-9]+' {{config_root}}/.docker-config/Dockerfile.playwright | grep -oE '[0-9]+[.][0-9]+' | head -n1)
-  gem_ver=$(grep -E '^ {4}playwright-ruby-client [(]' {{cwd}}/Gemfile.lock 2>/dev/null | grep -oE '[0-9]+[.][0-9]+' | head -n1)
-  if [ -n "$img_ver" ] && [ -n "$gem_ver" ] && [ "$img_ver" != "$gem_ver" ]; then
-    echo "WARN: playwright version drift — image v${img_ver} (Dockerfile.playwright) vs playwright-ruby-client ${gem_ver} (Gemfile.lock)." >&2
-    echo "      System tests may refuse to connect; align the image tag, npm playwright-core, and the gem." >&2
+  # PLAYWRIGHT_VERSION is derived from this worktree's Gemfile.lock
+  # (.scripts/playwright-version.sh via mise.local.toml). When it resolves,
+  # image + playwright-core + gem stay in lockstep automatically; when empty
+  # the playwright image falls back to a default tag that can drift.
+  if [ -z "${PLAYWRIGHT_VERSION:-}" ]; then
+    echo "WARN: PLAYWRIGHT_VERSION not derived from Gemfile.lock — playwright image uses its fallback tag and may drift from the gem (older mise.local.toml? re-render from .mise/local.toml.template)" >&2
   fi
   docker compose up -d
 """

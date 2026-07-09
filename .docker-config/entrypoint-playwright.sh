@@ -97,6 +97,9 @@ exec node -e '
   chromium.launchServer({
     headless: process.env.HEADLESS_BOOL === "true",
     args: ["--no-sandbox"],
+    // Playwright >= 1.60 binds loopback by default; other containers (app,
+    // host-published port) must reach the server, so bind all interfaces.
+    host: "0.0.0.0",
     port: parseInt(process.env.PLAYWRIGHT_PORT, 10),
     wsPath: "connect",
   }).then((server) => {
