@@ -219,7 +219,9 @@ run = """
     exit 1
   fi
   cd "$HOME"
-  pattern="^${prefix}[-_]"
+  # [-_] catches containers/volumes/networks (filial-*, filial_*);
+  # / catches the shared image repos (filial/rails, filial/claude, ...).
+  pattern="^${prefix}[-_/]"
 
   echo "This will remove:"
   echo "  - All docker containers/networks/volumes/images matching ${pattern}"

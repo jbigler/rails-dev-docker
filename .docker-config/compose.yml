@@ -1,5 +1,8 @@
 services:
   app:
+    # Shared tag keyed by runtime versions: without it every compose project
+    # names (and rebuilds) its own image per worktree.
+    image: ${PROJECT_PREFIX}/rails:ruby${RUBY_VERSION}-node${NODE_VERSION}
     build:
       target: rails
       args:
@@ -137,6 +140,7 @@ services:
       start_period: 30s
 
   nvim:
+    image: ${PROJECT_PREFIX}/nvim:ruby${RUBY_VERSION}-node${NODE_VERSION}
     build:
       target: nvim
       args:
@@ -170,6 +174,7 @@ services:
     command: ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
 
   playwright:
+    image: ${PROJECT_PREFIX}/playwright:latest
     build:
       context: .
       dockerfile: Dockerfile.playwright
