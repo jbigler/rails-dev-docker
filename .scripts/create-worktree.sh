@@ -109,7 +109,7 @@ else
 fi
 
 # Pre-create node_modules so Docker doesn't create it as root when
-# mounting the shared_node_modules volume over the bind-mounted worktree.
+# mounting the node_modules volume over the bind-mounted worktree.
 mkdir -p "${worktree_dir}/node_modules"
 
 # --- Seed untracked files (secrets/env) from the base worktree ---

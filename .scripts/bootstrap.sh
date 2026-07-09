@@ -57,20 +57,7 @@ cat > "$dest/mise.local.toml" <<EOF
 [env]
 PROJECT_PREFIX = "$prefix"
 GEM_VOLUME_BASE = "${prefix}_shared_gems"
-NODE_MODULES_VOLUME = "${prefix}_shared_node_modules"
 EOF
-
-ensure_volume() {
-  if docker volume inspect "$1" >/dev/null 2>&1; then
-    echo "  volume $1 (exists)"
-  else
-    docker volume create "$1" >/dev/null
-    echo "  volume $1 (created)"
-  fi
-}
-
-echo "Provisioning external docker volumes..."
-ensure_volume "${prefix}_shared_node_modules"
 
 echo "Running init-repo.sh for $input..."
 "$dest/.scripts/init-repo.sh" "$input"

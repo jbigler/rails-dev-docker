@@ -90,7 +90,7 @@ run = """
   if [ -n "${SOCKET_DIR:-}" ] && ! docker compose ps --status running --services 2>/dev/null | grep -qx db; then
     rm -f "${SOCKET_DIR}/db/.s.PGSQL."* 2>/dev/null || true
   fi
-  for vol in "$GEM_VOLUME" "$NODE_MODULES_VOLUME"; do
+  for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done
   docker compose up -d

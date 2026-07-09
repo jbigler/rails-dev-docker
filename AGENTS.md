@@ -43,7 +43,8 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
   vnc.<slug>.localhost. Traefik routes all.
 - COMPOSE_FILE = base .docker-config/compose.yml + worktree .dev/compose.yml (if present).
 - Ports: DB 55432+ID, Ruby debug 33000+ID, Neovim 17000+ID, Playwright 18888+ID.
-- GEM*VOLUME = filial_shared_gems_ruby*<ver> (common across worktrees); same for node.
+- GEM*VOLUME = filial_shared_gems_ruby*<ver> (common across worktrees). node_modules per worktree  
+  (compose-prefixed volume); npm cache shared via home bind mount.
 - DEV_DB_NAME from config/database.yml via .scripts/dev-db-name.sh (postgres; empty → manual).
 
 ## Docker stack (.docker-config/compose.yml)
@@ -67,7 +68,7 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
   (browser/MCP + rtk instructions); imports optional CLAUDE.local.md (gitignored home/.claude/) for  
   user-local instructions.
 
-Volumes shared_gems, shared_node_modules are external. Networks: dev (bridge,  
+Volume shared_gems is external; node_modules is per-worktree. Networks: dev (bridge,  
 MTU 1400) + proxy (external, ${PROJECT_PREFIX}\_proxy).
 
 ## Proxy (.docker-config/proxy/compose.yml)

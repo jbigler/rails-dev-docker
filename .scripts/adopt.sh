@@ -48,7 +48,6 @@ cat > "$root/mise.local.toml" <<EOF
 [env]
 PROJECT_PREFIX = "$prefix"
 GEM_VOLUME_BASE = "${prefix}_shared_gems"
-NODE_MODULES_VOLUME = "${prefix}_shared_node_modules"
 NVIM_CONFIG_DIR = "$HOME/.config/nvim"
 EOF
 echo "Wrote $root/mise.local.toml"
@@ -73,12 +72,6 @@ if [ -f "$tmpl" ] && [ ! -f "$dest/mise.local.toml" ]; then
 fi
 
 mkdir -p "$dest/node_modules"
-
-# --- External docker volumes ---
-for vol in "${prefix}_shared_node_modules"; do
-  docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
-  echo "  volume $vol ready"
-done
 
 cat <<EOF
 

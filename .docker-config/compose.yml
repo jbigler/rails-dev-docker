@@ -48,7 +48,7 @@ services:
       - ../.docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
       - ../.docker-config/home:/home/appuser
       - shared_gems:/usr/local/bundle
-      - shared_node_modules:/app/node_modules
+      - node_modules:/app/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
     entrypoint: ["entrypoint-app.sh"]
@@ -150,7 +150,7 @@ services:
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
-      - shared_node_modules:/app/node_modules
+      - node_modules:/app/node_modules
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ../.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
@@ -273,7 +273,7 @@ services:
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
-      - shared_node_modules:/app/node_modules
+      - node_modules:/app/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ${SSH_PATH}:/home/appuser/.ssh:ro
@@ -302,12 +302,14 @@ volumes:
   home:
   db_data:
   rustfs_data:
+  # Per-worktree (compose prefixes the project name): a single volume shared
+  # across worktrees let diverging lockfiles clobber each other and concurrent
+  # boots race in `npm install`. Installs stay fast via the npm cache in the
+  # shared /home/appuser bind mount (~/.npm).
+  node_modules:
   shared_gems:
     external: true
     name: ${GEM_VOLUME:-shared_gems}
-  shared_node_modules:
-    external: true
-    name: ${NODE_MODULES_VOLUME:-shared_node_modules}
 
 networks:
   dev:
