@@ -8,6 +8,17 @@ sudo /usr/local/bin/init-firewall.sh
 # home bind mount shared by every worktree's claude container, so a blind
 # remove/re-add on each boot races concurrent boots.
 CLAUDE_JSON="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json"
+[ -f "$CLAUDE_JSON" ] || echo '{}' > "$CLAUDE_JSON"
+
+# Pre-trust this worktree's project dir. The mount point is per-worktree
+# (/app-<slug>), so without this every new worktree's first interactive
+# session stops at the "Do you trust the files in this folder?" dialog.
+if ! jq -e --arg p "$PWD" '.projects[$p].hasTrustDialogAccepted == true' "$CLAUDE_JSON" >/dev/null 2>&1; then
+  tmp="${CLAUDE_JSON}.tmp.$$"
+  jq --arg p "$PWD" \
+    '.projects[$p] = ((.projects[$p] // {}) + {hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true})' \
+    "$CLAUDE_JSON" > "$tmp" && mv "$tmp" "$CLAUDE_JSON"
+fi
 
 # Pencil MCP server (reconfigure only when the host IP changed)
 HOST_IP=$(ip route | awk '/default/ {print $3}')
