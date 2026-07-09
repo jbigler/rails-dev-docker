@@ -71,6 +71,8 @@ PREFS
 
 # Restart loop: an MCP client can legitimately close the browser (Browser.close);
 # relaunch so the endpoint comes back without a container restart.
+# --test-type suppresses the "unsupported command-line flag: --no-sandbox"
+# warning bar (--disable-infobars alone no longer covers it).
 (
   while true; do
     "$CHROME_BIN" \
@@ -78,6 +80,8 @@ PREFS
       --no-first-run \
       --no-default-browser-check \
       --hide-crash-restore-bubble \
+      --disable-infobars \
+      --test-type \
       --user-data-dir="$CHROME_PROFILE_DIR" \
       --remote-debugging-port="$CDP_PORT" \
       --password-store=basic \
