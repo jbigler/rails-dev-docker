@@ -44,10 +44,38 @@
         margin-bottom: 0.625rem;
       }
       .worktree h2 {
+        display: flex;
+        align-items: baseline;
         margin: 0 0 0.5rem;
         font-size: 0.95rem;
         font-family: ui-monospace, SFMono-Regular, monospace;
         font-weight: 500;
+      }
+      .claude-status {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.7rem;
+        font-weight: 400;
+        opacity: 0.75;
+      }
+      .claude-status .dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+      }
+      .claude-status.working .dot {
+        background: #16a34a;
+      }
+      .claude-status.waiting .dot {
+        background: #d97706;
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.25;
+        }
       }
       .links {
         display: flex;
@@ -128,12 +156,50 @@
         return { name: host.replace(/\.localhost$/, ""), kind: "app" };
       }
 
+      // Claude session states written by each worktree's status hook
+      // (claude-status-hook.sh) into .docker-config/status/, served here
+      // at /status/ with a JSON autoindex.
+      async function loadClaudeStatuses() {
+        try {
+          const listing = await fetch("/status/").then((r) => r.json());
+          const entries = await Promise.all(
+            listing
+              .filter((f) => /^[^.].*\.json$/.test(f.name))
+              .map(async (f) => {
+                const s = await fetch(`/status/${f.name}`).then((r) =>
+                  r.json(),
+                );
+                return [f.name.replace(/\.json$/, ""), s];
+              }),
+          );
+          return Object.fromEntries(entries);
+        } catch {
+          return {};
+        }
+      }
+
+      function ago(ts) {
+        const s = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1e3));
+        if (s < 60) return `${s}s`;
+        if (s < 3600) return `${Math.round(s / 60)}m`;
+        return `${Math.round(s / 3600)}h`;
+      }
+
+      function claudeBadge(status) {
+        if (!status || status.state === "offline") return "";
+        const label = status.state === "working" ? "claude working" : "claude waiting";
+        return `<span class="claude-status ${status.state}"><span class="dot"></span>${label} · ${ago(status.ts)}</span>`;
+      }
+
       async function load() {
         const status = document.getElementById("status");
         const container = document.getElementById("worktrees");
-        let routers;
+        let routers, claude;
         try {
-          routers = await fetch("/api/http/routers").then((r) => r.json());
+          [routers, claude] = await Promise.all([
+            fetch("/api/http/routers").then((r) => r.json()),
+            loadClaudeStatuses(),
+          ]);
         } catch (e) {
           container.innerHTML = `<div class="empty">Failed to load: ${e.message}</div>`;
           return;
@@ -163,6 +229,13 @@
           }
         }
 
+        // A claude session can run while the worktree's app stack is down —
+        // still show a card for it (badge only, no links).
+        for (const name of Object.keys(claude)) {
+          if (claude[name].state !== "offline" && !worktrees[name])
+            worktrees[name] = {};
+        }
+
         const sorted = Object.entries(worktrees).sort(([a], [b]) =>
           a.localeCompare(b),
         );
@@ -178,7 +251,7 @@
                     `<a href="${urls[k]}" class="${i === 0 ? "primary" : ""}">${LABELS[k]}</a>`,
                 )
                 .join("");
-              return `<div class="worktree"><h2>${name}</h2><div class="links">${links}</div></div>`;
+              return `<div class="worktree"><h2>${name}${claudeBadge(claude[name])}</h2><div class="links">${links}</div></div>`;
             })
             .join("");
         }

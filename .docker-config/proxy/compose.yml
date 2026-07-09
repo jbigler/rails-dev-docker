@@ -56,6 +56,10 @@ services:
     restart: unless-stopped
     volumes:
       - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./home-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Written by each worktree's claude container (status hook); served
+      # at /status/ for the dashboard's claude badges.
+      - ../status:/usr/share/nginx/html/status:ro
     networks:
       - proxy
     labels:

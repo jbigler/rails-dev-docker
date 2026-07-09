@@ -96,6 +96,9 @@ if [ -n "$orphan_images" ]; then
   docker rmi $orphan_images || true
 fi
 
+# Drop the dashboard's claude status file for this worktree
+rm -f "${root}/.docker-config/status/${clean_name}.json"
+
 # Deregister ports
 REGISTRY="${root}/ports.registry"
 if [ -f "$REGISTRY" ]; then

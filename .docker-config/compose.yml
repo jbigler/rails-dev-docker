@@ -287,6 +287,11 @@ services:
       # take effect on the next `run` without an image rebuild.
       - ../.docker-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro
       - ../.docker-config/init-firewall.sh:/usr/local/bin/init-firewall.sh:ro
+      # Session-state drop zone for the wt.localhost dashboard badge — the
+      # status hook writes /status/<worktree>.json, the proxy's home
+      # container serves the same directory read-only.
+      - ../.docker-config/claude-status-hook.sh:/usr/local/bin/claude-status-hook.sh:ro
+      - ../.docker-config/status:/status
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
       - node_modules:/app-${CURRENT_WORKTREE_NAME}/node_modules
@@ -307,6 +312,7 @@ services:
       SSH_AUTH_SOCK: /tmp/ssh-agent.sock
       RUSTFS_ENDPOINT: http://rustfs:9000
       DOMAIN: ${WORKTREE_HOST}
+      WORKTREE_NAME: ${CURRENT_WORKTREE_NAME}
     profiles: ["do_not_start"]
     networks:
       - dev

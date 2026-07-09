@@ -28,6 +28,20 @@ if ! jq -e '.mcpServers["chrome-devtools"]' "$CLAUDE_JSON" >/dev/null 2>&1; then
   claude mcp add -s user chrome-devtools -- npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222 2>/dev/null || true
 fi
 
+# Register the status hook (claude badge on the wt.localhost dashboard)
+# idempotently — settings.json lives in the same shared home mount, so only
+# touch it when the hook is missing.
+SETTINGS_JSON="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+[ -f "$SETTINGS_JSON" ] || echo '{}' > "$SETTINGS_JSON"
+if ! grep -q claude-status-hook "$SETTINGS_JSON"; then
+  tmp="${SETTINGS_JSON}.tmp.$$"
+  jq '
+    def entry: {hooks: [{type: "command", command: "/usr/local/bin/claude-status-hook.sh", timeout: 5}]};
+    .hooks = reduce ("SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "Notification", "SessionEnd") as $e
+      (.hooks // {}; .[$e] = ((.[$e] // []) + [entry]))
+  ' "$SETTINGS_JSON" > "$tmp" && mv "$tmp" "$SETTINGS_JSON"
+fi
+
 # Refresh global memory from the committed copy (.docker-config/CLAUDE.md).
 # Plain copy, not a bind mount at this path: rtk init rewrites CLAUDE.md via
 # temp-file + rename, which fails on a file that is itself a mount point.

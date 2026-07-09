@@ -81,6 +81,9 @@ One Traefik v3.7 stack (COMPOSE_PROJECT_NAME=filial-proxy).
 Docker provider, exposedByDefault=false, entrypoint web:80, dashboard :8080. Preserve encoded URL chars (S3).  
 wt.localhost home page; wt.localhost/api→Traefik API; logs.localhost→Dozzle (live logs, all project  
 containers, DOZZLE_FILTER=name=${PROJECT_PREFIX}). mise run up start proxy via depends=["proxy:up"].  
+wt.localhost cards show claude badge (working/waiting): claude-status-hook.sh (hook events, registered  
+idempotently by entrypoint-claude.sh into shared settings.json) writes .docker-config/status/<slug>.json  
+(git-ignored); home nginx serves it at /status/ (JSON autoindex, home-nginx.conf). wt:rm cleans the file.  
 Host ports (80/8080, also nvim/ruby-debug in worktree stack) bind 127.0.0.1 only — Host-header routing would  
 otherwise expose all worktrees + password-less VNC to LAN. Containers can't reach loopback-bound host ports, so  
 Traefik has static IP TRAEFIK_IP (default 10.213.0.2, subnet PROXY_SUBNET) on proxy net; worktree extra_hosts  
