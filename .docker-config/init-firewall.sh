@@ -24,15 +24,16 @@ else
     echo "No Docker DNS rules to restore"
 fi
 
-# First allow DNS and localhost before any restrictions
-# Allow outbound DNS
-iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
-# Allow inbound DNS responses
-iptables -A INPUT -p udp --sport 53 -j ACCEPT
-# Allow outbound SSH
-iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
-# Allow inbound SSH responses
-iptables -A INPUT -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+# DNS: only Docker's embedded resolver (127.0.0.11; resolv.conf points there
+# on user-defined networks). Its NAT redirect was restored above and the
+# post-DNAT packets ride loopback, which is allowed below — these scoped rules
+# just make the intent explicit and cover direct queries. A blanket port-53
+# accept would be an exfiltration channel (DNS tunneling).
+iptables -A OUTPUT -d 127.0.0.11 -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -d 127.0.0.11 -p tcp --dport 53 -j ACCEPT
+# No blanket SSH rule: the allowed-domains ipset matches all ports, and it
+# includes GitHub's git ranges — so `git@github.com` still works while SSH
+# to arbitrary hosts (an exfiltration channel) is blocked.
 # Allow localhost
 iptables -A INPUT -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
@@ -144,6 +145,18 @@ iptables -A OUTPUT -m set --match-set allowed-domains dst -j ACCEPT
 
 # Explicitly REJECT all other outbound traffic for immediate feedback
 iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
+
+# No IPv6 on these networks; close that path too (as init-firewall-playwright.sh
+# does) so the v4 allowlist can't be bypassed if the daemon ever enables it.
+if command -v ip6tables >/dev/null 2>&1; then
+  ip6tables -A INPUT -i lo -j ACCEPT 2>/dev/null || true
+  ip6tables -A OUTPUT -o lo -j ACCEPT 2>/dev/null || true
+  ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || true
+  ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || true
+  ip6tables -P INPUT DROP 2>/dev/null || true
+  ip6tables -P FORWARD DROP 2>/dev/null || true
+  ip6tables -P OUTPUT DROP 2>/dev/null || true
+fi
 
 echo "Firewall configuration complete"
 echo "Verifying firewall rules..."
