@@ -47,7 +47,7 @@ run = """
 """
 alias = "rt"
 
-[tasks.rails_sytem_tests]
+[tasks.rails_system_tests]
 description = "Run the Rails system tests. Pass any 'rails test:system' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up"]
 usage = 'arg "[args]" var=#true help="args forwarded to the test runner (e.g. test/system/foo_test.rb:42, --seed 123)"'
@@ -90,7 +90,7 @@ run = """
   if [ -n "${SOCKET_DIR:-}" ] && ! docker compose ps --status running --services 2>/dev/null | grep -qx db; then
     rm -f "${SOCKET_DIR}/db/.s.PGSQL."* 2>/dev/null || true
   fi
-  for vol in claude_config claude_bashhistory "$GEM_VOLUME" "$NODE_MODULES_VOLUME"; do
+  for vol in "$GEM_VOLUME" "$NODE_MODULES_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done
   docker compose up -d

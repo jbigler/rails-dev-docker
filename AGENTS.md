@@ -22,8 +22,8 @@ dev/test stacks via mise tasks + shared Traefik proxy. Repo history unrelated to
 mise run wt <branch|PR#|new-branch> → .scripts/create-worktree.sh:
 
 1. Resolve branch (PR# via gh), sanitize name (lower, no-alphanum→-, cap 40; hash suffix for collision).
-2. Allocate next WORKTREE_ID = max(registry)+1, append slug:ID to ports.registry.
-3. git worktree add (local/remote branch or new from HEAD).
+2. git worktree add (local/remote branch or new from HEAD).
+3. Allocate next WORKTREE_ID = max(registry)+1, append slug:ID to ports.registry (only after add succeeds).
 4. Render mise.local.toml from .mise/local.toml.template (WORKTREE_ID).
 5. Pre-create node_modules/ (prevent root ownership on mount).
 6. Seed untracked files from master/ per .docker-config/worktree-seed.txt.
@@ -67,7 +67,7 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
   (browser/MCP + rtk instructions); imports optional CLAUDE.local.md (gitignored home/.claude/) for  
   user-local instructions.
 
-Volumes shared_gems, shared_node_modules, claude_config, claude_bashhistory are external. Networks: dev (bridge,  
+Volumes shared_gems, shared_node_modules are external. Networks: dev (bridge,  
 MTU 1400) + proxy (external, ${PROJECT_PREFIX}\_proxy).
 
 ## Proxy (.docker-config/proxy/compose.yml)
@@ -84,7 +84,7 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
 
 - up(u)/down/stop(s)/destroy: lifecycle. up check external volumes + clear postgres socket + start proxy. down  
   remove volumes. destroy nuke all filial[-_]\* resources + folder (confirm prompt).
-- rails/console(c)/test(t)/rails_tests(rt)/rails_sytem_tests(rst)/ci: exec into app or docker compose run. Add  
+- rails/console(c)/test(t)/rails_tests(rt)/rails_system_tests(rst)/ci: exec into app or docker compose run. Add  
   --label traefik.enable=false for non-routed tasks (avoid 502).
 - nvim(v), claude(ai)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
 

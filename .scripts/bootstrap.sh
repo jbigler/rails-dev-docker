@@ -70,8 +70,6 @@ ensure_volume() {
 }
 
 echo "Provisioning external docker volumes..."
-ensure_volume claude_config
-ensure_volume claude_bashhistory
 ensure_volume "${prefix}_shared_node_modules"
 
 echo "Running init-repo.sh for $input..."

@@ -270,7 +270,6 @@ services:
     volumes:
       - ../.docker-config/home:/home/appuser
       - ../.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro
-      - claude_bashhistory:/commandhistory
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
@@ -303,10 +302,6 @@ volumes:
   home:
   db_data:
   rustfs_data:
-  claude_config:
-    external: true
-  claude_bashhistory:
-    external: true
   shared_gems:
     external: true
     name: ${GEM_VOLUME:-shared_gems}

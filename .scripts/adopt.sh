@@ -75,7 +75,7 @@ fi
 mkdir -p "$dest/node_modules"
 
 # --- External docker volumes ---
-for vol in claude_config claude_bashhistory "${prefix}_shared_node_modules"; do
+for vol in "${prefix}_shared_node_modules"; do
   docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   echo "  volume $vol ready"
 done

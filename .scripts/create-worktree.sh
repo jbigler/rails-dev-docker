@@ -82,8 +82,6 @@ while IFS=: read -r _name id; do
 done < "$REGISTRY"
 next_id=$((max_id + 1))
 
-echo "${clean_name}:${next_id}" >> "$REGISTRY"
-
 # --- Create worktree ---
 
 if run_git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
@@ -96,6 +94,10 @@ else
   echo "Creating new branch based on ${base_branch}..."
   run_git worktree add -b "$branch" "$worktree_dir" "$base_branch"
 fi
+
+# Register the ID only after the worktree exists — registering first would
+# leak a registry line (and creep the ID counter) when worktree add fails.
+echo "${clean_name}:${next_id}" >> "$REGISTRY"
 
 # --- Generate mise.local.toml from template ---
 

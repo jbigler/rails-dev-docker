@@ -97,7 +97,7 @@ _Tip: Set a shell alias for "mise run" to "mr"._
 
 - `mise run test` (`t`) — Retest watcher
 - `mise run rails_tests [args]` (`rt`) — `bin/rails test`
-- `mise run rails_sytem_tests [args]` (`rst`) — `bin/rails test:system`
+- `mise run rails_system_tests [args]` (`rst`) — `bin/rails test:system`
 - `mise run ci` — full CI lint + test pass (`rake ci:build:commit`)
 
 ### Database / RustFS snapshots
