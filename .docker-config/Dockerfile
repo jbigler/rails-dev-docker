@@ -59,9 +59,32 @@ RUN apt-get update -qq && \
 # Install all remaining packages
 RUN apt-get update -qq && \
   apt-get install --no-install-recommends -y \
+  build-essential \
   libpq-dev \
-  postgresql-client-16 \
+  git \
+  ca-certificates \
+  ffmpeg \
+  libvips \
+  libimage-exiftool-perl \
+  imagemagick \
+  pkg-config \
+  poppler-utils \
+  poppler-data \
+  qpdf \
+  fonts-recommended \
+  curl \
+  libssl-dev \
+  libreadline-dev \
+  zlib1g-dev \
+  autoconf \
+  bison \
   libyaml-dev \
+  libffi-dev \
+  libgdbm-dev \
+  libncurses5-dev \
+  libsqlite3-dev \
+  tzdata \
+  postgresql-client-16 \
   libsqlite3-0 \
   libjemalloc2 \
   kitty-terminfo \
@@ -69,18 +92,10 @@ RUN apt-get update -qq && \
   zsh \
   fd-find \
   ripgrep \
-  libimage-exiftool-perl \
-  build-essential \
-  git \
-  libvips \
   openssh-client \
-  pkg-config \
   libpng-dev \
   libjpeg-dev \
   libtiff-dev \
-  poppler-utils \
-  poppler-data \
-  imagemagick \
   libmagickwand-dev \
   libmagickcore-dev && \
   rm -rf /var/lib/apt/lists/*
