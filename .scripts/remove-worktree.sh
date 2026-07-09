@@ -56,9 +56,14 @@ if [ -n "$dirty" ]; then
   fi
 fi
 
-# Determine compose project name (mirrors mise.local.toml.template)
-project_prefix="${PROJECT_PREFIX:-default}"
-project_name="${project_prefix}-${clean_name}"
+# Determine compose project name (mirrors mise.local.toml.template).
+# No fallback: with a wrong prefix the docker teardown below silently
+# targets a nonexistent project and leaves the real stack running.
+if [ -z "${PROJECT_PREFIX:-}" ]; then
+  echo "Error: PROJECT_PREFIX is unset — run via 'mise run wt:rm' so the mise env is loaded" >&2
+  exit 1
+fi
+project_name="${PROJECT_PREFIX}-${clean_name}"
 
 echo "Stopping compose stack: ${project_name}..."
 docker compose -p "$project_name" down -v --rmi local --remove-orphans --timeout 30 || true
