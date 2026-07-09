@@ -61,7 +61,9 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
   Egress firewalled (init-firewall-playwright.sh, NET_ADMIN): loopback + RFC1918 only — browser can't  
   reach internet (else it bypasses claude's firewall).
 - rustfs — S3 storage, Traefik-routed.
-- claude — claude target, profile do_not_start; NET_ADMIN/NET_RAW; entrypoint: init-firewall.sh, add MCP  
+- claude — claude target, profile do_not_start; NET_ADMIN/NET_RAW; worktree mounted at /app-<slug>  
+  (NOT /app: ~/.claude in the shared home keys sessions by path — a common /app intermixes  
+  session/resume history across worktrees); entrypoint: init-firewall.sh, add MCP  
   (pencil; chrome-devtools via socat loopback bridge 127.0.0.1:9222→playwright:9223 — CDP rejects  
   non-localhost Host header), rtk init, then claude --dangerously-skip-permissions.  
   Global memory: committed .docker-config/CLAUDE.md mounted ro → /home/appuser/.claude/CLAUDE.md  

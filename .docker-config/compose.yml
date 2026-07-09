@@ -269,16 +269,20 @@ services:
         GIT_DELTA_VERSION: "0.18.2"
     volumes:
       - ../.docker-config/home:/home/appuser
+      # Worktree-specific mount point: ~/.claude/projects keys sessions by
+      # path and the home dir is shared by every worktree's claude container,
+      # so a common /app would intermix session/resume history across worktrees.
+      - ../${CURRENT_WORKTREE_NAME}:/app-${CURRENT_WORKTREE_NAME}
       - ../.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro
-      - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
-      - node_modules:/app/node_modules
+      - node_modules:/app-${CURRENT_WORKTREE_NAME}/node_modules
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ${SSH_AUTH_SOCK}:/tmp/ssh-agent.sock:ro
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
+    working_dir: /app-${CURRENT_WORKTREE_NAME}
     tty: true
     stdin_open: true
     env_file: .env

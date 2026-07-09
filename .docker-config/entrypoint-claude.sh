@@ -4,10 +4,18 @@ set -euo pipefail
 # Run firewall setup as root via sudo (allowed by /etc/sudoers.d/firewall)
 sudo /usr/local/bin/init-firewall.sh
 
-# Configure Pencil MCP server
+# Configure MCP servers idempotently — the user-scope config lives in the
+# home bind mount shared by every worktree's claude container, so a blind
+# remove/re-add on each boot races concurrent boots.
+CLAUDE_JSON="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json"
+
+# Pencil MCP server (reconfigure only when the host IP changed)
 HOST_IP=$(ip route | awk '/default/ {print $3}')
-claude mcp remove pencil -s user 2>/dev/null || true
-claude mcp add --transport sse -s user pencil "http://${HOST_IP}:8089/sse" 2>/dev/null || true
+PENCIL_URL="http://${HOST_IP}:8089/sse"
+if [ "$(jq -r '.mcpServers.pencil.url // empty' "$CLAUDE_JSON" 2>/dev/null)" != "$PENCIL_URL" ]; then
+  claude mcp remove pencil -s user 2>/dev/null || true
+  claude mcp add --transport sse -s user pencil "$PENCIL_URL" 2>/dev/null || true
+fi
 
 # Bridge the playwright container's interactive-Chromium CDP endpoint onto loopback.
 # Chrome's DevTools HTTP server rejects non-localhost/non-IP Host headers (DNS-rebinding
@@ -16,8 +24,9 @@ claude mcp add --transport sse -s user pencil "http://${HOST_IP}:8089/sse" 2>/de
 socat TCP-LISTEN:9222,bind=127.0.0.1,fork,reuseaddr TCP:playwright:9223 >/dev/null 2>&1 &
 
 # Configure chrome-devtools MCP server against the bridged browser
-claude mcp remove chrome-devtools -s user 2>/dev/null || true
-claude mcp add -s user chrome-devtools -- npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222 2>/dev/null || true
+if ! jq -e '.mcpServers["chrome-devtools"]' "$CLAUDE_JSON" >/dev/null 2>&1; then
+  claude mcp add -s user chrome-devtools -- npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222 2>/dev/null || true
+fi
 
 # Refresh global memory from the committed copy (.docker-config/CLAUDE.md).
 # Plain copy, not a bind mount at this path: rtk init rewrites CLAUDE.md via
