@@ -120,7 +120,14 @@ if [ -z "$HOST_IP" ]; then
     exit 1
 fi
 
-HOST_NETWORK=$(echo "$HOST_IP" | sed "s/\.[0-9]*$/.0\/24/")
+# Read the attached network's actual subnet from the kernel route — Docker
+# networks are commonly /16, so guessing /24 from the gateway would silently
+# block containers that land outside x.x.x.0/24.
+HOST_NETWORK=$(ip route | awk '/proto kernel/ && /scope link/ {print $1; exit}')
+if [ -z "$HOST_NETWORK" ]; then
+    HOST_NETWORK=$(echo "$HOST_IP" | sed "s/\.[0-9]*$/.0\/24/")
+    echo "WARN: no kernel route found, falling back to gateway/24"
+fi
 echo "Host network detected as: $HOST_NETWORK"
 
 # Allow traffic to host MCP servers (e.g. Pencil via supergateway)

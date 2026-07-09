@@ -252,13 +252,9 @@ RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42
 ENV RTK_INSTALL_DIR=/usr/local/bin
 RUN /bin/bash -c "$(wget -qO- https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh)"
 
-# Copy and set up firewall script
-COPY init-firewall.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/init-firewall.sh
-
-COPY entrypoint-claude.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint-claude.sh && \
-  echo "${APP_USER} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/firewall
+# entrypoint-claude.sh and init-firewall.sh are volume-mounted by compose
+# (repo convention) so script edits don't require an image rebuild.
+RUN echo "${APP_USER} ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/firewall
 
 ENTRYPOINT ["/usr/local/bin/entrypoint-claude.sh"]
 

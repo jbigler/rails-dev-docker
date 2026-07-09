@@ -274,6 +274,10 @@ services:
       # so a common /app would intermix session/resume history across worktrees.
       - ../${CURRENT_WORKTREE_NAME}:/app-${CURRENT_WORKTREE_NAME}
       - ../.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro
+      # Mounted, not baked into the image (repo convention): script edits
+      # take effect on the next `run` without an image rebuild.
+      - ../.docker-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro
+      - ../.docker-config/init-firewall.sh:/usr/local/bin/init-firewall.sh:ro
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
       - node_modules:/app-${CURRENT_WORKTREE_NAME}/node_modules
