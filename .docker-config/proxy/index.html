@@ -79,12 +79,21 @@
         padding: 3rem 1rem;
         font-style: italic;
       }
+      .status a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .status a:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
     <header>
       <h1>Worktrees</h1>
-      <div class="status" id="status"></div>
+      <div class="status">
+        <a href="http://logs.localhost">logs</a> · <span id="status"></span>
+      </div>
     </header>
     <div id="worktrees"></div>
     <script>
@@ -115,7 +124,7 @@
             name: host.slice(4).replace(/\.localhost$/, ""),
             kind: "vnc",
           };
-        if (host === "wt.localhost") return null;
+        if (host === "wt.localhost" || host === "logs.localhost") return null;
         return { name: host.replace(/\.localhost$/, ""), kind: "app" };
       }
 

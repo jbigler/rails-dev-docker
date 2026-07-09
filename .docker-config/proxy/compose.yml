@@ -34,6 +34,23 @@ services:
         # whose ports are loopback-bound and unreachable from containers.
         ipv4_address: ${TRAEFIK_IP:-10.213.0.2}
 
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Only this workspace's containers (filial-* and filial_*); keeps
+      # unrelated docker noise out of the log view.
+      DOZZLE_FILTER: name=${PROJECT_PREFIX:-default}
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wt-logs.rule=Host(`logs.localhost`)"
+      - "traefik.http.routers.wt-logs.entrypoints=web"
+      - "traefik.http.services.wt-logs.loadbalancer.server.port=8080"
+
   home:
     image: nginx:alpine
     restart: unless-stopped
