@@ -93,6 +93,14 @@ run = """
   for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done
+  # Warn when the Playwright gem drifts from the browser-server image — the
+  # Ruby client can refuse to connect across versions (a cryptic failure).
+  img_ver=$(sed -n 's|^FROM mcr.microsoft.com/playwright:v\([0-9]*\.[0-9]*\)\..*|\1|p' {{config_root}}/.docker-config/Dockerfile.playwright | head -n1)
+  gem_ver=$(sed -n 's|^    playwright-ruby-client (\([0-9]*\.[0-9]*\)[.)].*|\1|p' Gemfile.lock 2>/dev/null | head -n1)
+  if [ -n "$img_ver" ] && [ -n "$gem_ver" ] && [ "$img_ver" != "$gem_ver" ]; then
+    echo "WARN: playwright version drift — image v${img_ver} (Dockerfile.playwright) vs playwright-ruby-client ${gem_ver} (Gemfile.lock)." >&2
+    echo "      System tests may refuse to connect; align the image tag, npm playwright-core, and the gem." >&2
+  fi
   docker compose up -d
 """
 alias = "u"
