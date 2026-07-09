@@ -106,7 +106,7 @@ services:
       -c pg_stat_statements.track='all'
       -c max_connections=200
       -c max_locks_per_transaction=256
-      -c shared_buffers=1GB
+      -c shared_buffers=256MB
       -c temp_buffers=128MB
       -c work_mem=64MB
       -c maintenance_work_mem=256MB
