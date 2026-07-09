@@ -27,12 +27,16 @@ services:
     networks:
       - dev
       - proxy
+    # Traefik-routed hosts resolve to Traefik's static IP on the proxy
+    # network — its host ports are loopback-bound, so host-gateway can't
+    # reach them from a container.
     extra_hosts:
-      - "${WORKTREE_HOST}:host-gateway"
-      - "${S3_HOST}:host-gateway"
-      - "${RUSTFS_UI_HOST}:host-gateway"
+      - "${WORKTREE_HOST}:${TRAEFIK_IP:-10.213.0.2}"
+      - "${S3_HOST}:${TRAEFIK_IP:-10.213.0.2}"
+      - "${RUSTFS_UI_HOST}:${TRAEFIK_IP:-10.213.0.2}"
+    # Loopback only — a remote debug session is arbitrary code execution.
     ports:
-      - "0.0.0.0:${RUBY_DEBUG_PORT:-38698}:38698"
+      - "127.0.0.1:${RUBY_DEBUG_PORT:-38698}:38698"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-app.rule=Host(`${WORKTREE_HOST}`)"
@@ -159,8 +163,9 @@ services:
       GEM_VOLUME: ${GEM_VOLUME}
     networks:
       - dev
+    # Loopback only — nvim RPC allows arbitrary command execution.
     ports:
-      - "0.0.0.0:${NVIM_PORT:-7777}:7777"
+      - "127.0.0.1:${NVIM_PORT:-7777}:7777"
     entrypoint: ["entrypoint-nvim.sh"]
     command: ["/usr/local/bin/nvim", "--headless", "--listen", "0.0.0.0:7777"]
 
@@ -180,10 +185,11 @@ services:
     networks:
       - dev
       - proxy
+    # See the app service — Traefik-routed hosts via its static proxy-net IP.
     extra_hosts:
-      - "${WORKTREE_HOST}:host-gateway"
-      - "${S3_HOST}:host-gateway"
-      - "${RUSTFS_UI_HOST}:host-gateway"
+      - "${WORKTREE_HOST}:${TRAEFIK_IP:-10.213.0.2}"
+      - "${S3_HOST}:${TRAEFIK_IP:-10.213.0.2}"
+      - "${RUSTFS_UI_HOST}:${TRAEFIK_IP:-10.213.0.2}"
     cap_add:
       - NET_ADMIN
       - NET_RAW

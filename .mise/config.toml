@@ -4,6 +4,11 @@ GID = "{{exec(command='id -g')}}"
 PROJECT_PREFIX = "{{env.PROJECT_PREFIX | default(value='default')}}"
 GEM_VOLUME_BASE = "{{env.GEM_VOLUME_BASE | default(value='default_shared_gems')}}"
 SSH_PATH = "{{ env.SSH_PATH | default(value = env.HOME ~ '/.ssh') }}"
+# Proxy network subnet and Traefik's static IP on it (worktree extra_hosts
+# target). Override both in mise.local.toml when running multiple
+# PROJECT_PREFIX workspaces, or the second proxy network will fail to create.
+PROXY_SUBNET = "{{env.PROXY_SUBNET | default(value='10.213.0.0/24')}}"
+TRAEFIK_IP = "{{env.TRAEFIK_IP | default(value='10.213.0.2')}}"
 NVIM_CONFIG_DIR = "{{ env.NVIM_CONFIG_DIR | default(value = env.HOME ~ '/.config/nvim') }}"
 
 [tasks.nvim]

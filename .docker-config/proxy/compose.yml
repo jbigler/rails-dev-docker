@@ -19,13 +19,20 @@ services:
       - "--api.insecure=true"
       - "--log.level=INFO"
       - "--accesslog=false"
+    # Loopback only — with Host-header routing, a 0.0.0.0 bind would expose
+    # every worktree app, the password-less noVNC pages, the RustFS UI, and
+    # the insecure dashboard to the whole LAN.
     ports:
-      - "0.0.0.0:80:80"
-      - "0.0.0.0:8080:8080"
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - proxy
+      proxy:
+        # Static IP so worktree containers can reach Traefik-routed hosts
+        # (extra_hosts in ../compose.yml) without going through the host,
+        # whose ports are loopback-bound and unreachable from containers.
+        ipv4_address: ${TRAEFIK_IP:-10.213.0.2}
 
   home:
     image: nginx:alpine
@@ -52,3 +59,8 @@ networks:
     driver: bridge
     driver_opts:
       com.docker.network.driver.mtu: 1400
+    # Fixed subnet so TRAEFIK_IP is predictable. Override both (mise.local.toml)
+    # when running multiple PROJECT_PREFIX workspaces side by side.
+    ipam:
+      config:
+        - subnet: ${PROXY_SUBNET:-10.213.0.0/24}
