@@ -85,3 +85,7 @@ networks:
     ipam:
       config:
         - subnet: ${PROXY_SUBNET:-10.213.0.0/24}
+          # Dynamic IPs come only from the upper half of the subnet, so
+          # Traefik's static TRAEFIK_IP (low in the subnet) can never be
+          # claimed first by another container in the same `up`.
+          ip_range: ${PROXY_IP_RANGE:-10.213.0.128/25}
