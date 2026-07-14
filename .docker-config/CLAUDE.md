@@ -19,8 +19,8 @@ connects through a local CDP bridge on 127.0.0.1:9222).
 
 - Use the chrome-devtools MCP tools to navigate, click, fill forms, read the
   DOM, take screenshots, and inspect console/network activity.
-- The browser starts at http://app:3000 (this worktree's Rails dev server).
-  Stick to http://app:3000 URLs — the browser's egress is firewalled and
+- The browser starts at http://rails:3000 (this worktree's Rails dev server).
+  Stick to http://rails:3000 URLs — the browser's egress is firewalled and
   cannot reach the internet.
 - The human can watch and interact with the same browser live via VNC, so it
   can be used for cooperative debugging (e.g., ask them to log in by hand).

@@ -1,5 +1,5 @@
 services:
-  app:
+  rails:
     # Shared tag keyed by runtime versions: without it every compose project
     # names (and rebuilds) its own image per worktree.
     image: ${PROJECT_PREFIX}/rails:ruby${RUBY_VERSION}-node${NODE_VERSION}
@@ -194,7 +194,7 @@ services:
     networks:
       - dev
       - proxy
-    # See the app service — Traefik-routed hosts via its static proxy-net IP.
+    # See the rails service — Traefik-routed hosts via its static proxy-net IP.
     extra_hosts:
       - "${WORKTREE_HOST}:${TRAEFIK_IP:-10.213.0.2}"
       - "${S3_HOST}:${TRAEFIK_IP:-10.213.0.2}"

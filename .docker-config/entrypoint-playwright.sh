@@ -55,12 +55,15 @@ websockify --web=/usr/share/novnc "$VNC_WEB_PORT" "localhost:${VNC_RFB_PORT}" &
 CDP_PORT="${CDP_PORT:-9222}"
 CDP_PUBLIC_PORT="${CDP_PUBLIC_PORT:-9223}"
 CHROME_PROFILE_DIR="${CHROME_PROFILE_DIR:-/tmp/claude-chrome-profile}"
-# Rails dev only authorizes hosts in DOMAIN/DEV_HOSTS; "app" is allowed via DEV_HOSTS.
-CHROME_START_URL="${CHROME_START_URL:-http://app:3000}"
+# Rails dev only authorizes hosts in DOMAIN/DEV_HOSTS; "rails" is allowed via DEV_HOSTS.
+CHROME_START_URL="${CHROME_START_URL:-http://rails:3000}"
 CHROME_BIN="$(node -e 'console.log(require("/usr/lib/node_modules/playwright-core").chromium.executablePath())')"
 
 # Clear stale singleton locks left by an unclean shutdown (same reason as the X locks).
 rm -f "${CHROME_PROFILE_DIR}/SingletonLock" "${CHROME_PROFILE_DIR}/SingletonSocket" "${CHROME_PROFILE_DIR}/SingletonCookie"
+# The profile survives restarts in /tmp; drop recorded dynamic-HSTS / https
+# upgrade decisions so past upgrades can't keep forcing https on the dev host.
+rm -f "${CHROME_PROFILE_DIR}/Default/TransportSecurity"
 
 # Throwaway profile: reset prefs every boot to keep the password manager (and its
 # "save password" bubble) off — there is no flag for this, only profile preferences.
@@ -68,6 +71,22 @@ mkdir -p "${CHROME_PROFILE_DIR}/Default"
 cat > "${CHROME_PROFILE_DIR}/Default/Preferences" <<'PREFS'
 {"credentials_enable_service":false,"profile":{"password_manager_enabled":false,"password_manager_leak_detection":false}}
 PREFS
+
+# Keep Chromium off https for the plain-http dev server. Managed policy instead
+# of --disable-features: the feature names churn across Chromium versions
+# (HttpsUpgrades, HttpsFirstBalancedMode*, ...) while the policy API is stable.
+# Both dirs covered — Chromium reads /etc/chromium, Chrome-branded builds
+# /etc/opt/chrome.
+for policy_dir in /etc/chromium/policies/managed /etc/opt/chrome/policies/managed; do
+  mkdir -p "$policy_dir"
+  cat > "$policy_dir/no-https-upgrades.json" <<'POLICY'
+{
+  "HttpsOnlyMode": "disallowed",
+  "HttpsUpgradesEnabled": false,
+  "HttpAllowlist": ["rails"]
+}
+POLICY
+done
 
 # Restart loop: an MCP client can legitimately close the browser (Browser.close);
 # relaunch so the endpoint comes back without a container restart.
@@ -101,7 +120,7 @@ exec node -e '
   chromium.launchServer({
     headless: process.env.HEADLESS_BOOL === "true",
     args: ["--no-sandbox"],
-    // Playwright >= 1.60 binds loopback by default; other containers (app,
+    // Playwright >= 1.60 binds loopback by default; other containers (rails,
     // host-published port) must reach the server, so bind all interfaces.
     host: "0.0.0.0",
     port: parseInt(process.env.PLAYWRIGHT_PORT, 10),

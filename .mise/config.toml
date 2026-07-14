@@ -23,26 +23,26 @@ description = "Start the Retest runner."
 depends = ["up"]
 run = """
   CMD='gem list -i retest > /dev/null 2>&1 || gem install retest && retest --rails'
-  # `docker compose run` inherits the app service's traefik labels + proxy network,
+  # `docker compose run` inherits the rails service's traefik labels + proxy network,
   # so the one-off container registers as a second backend for the worktree host.
   # Traefik then round-robins onto it (nothing on :3000) → 502s. Opt it out.
-  docker compose run -e DISABLE_COVERAGE=true --label "traefik.enable=false" --rm -it app sh -c "$CMD"
+  docker compose run -e DISABLE_COVERAGE=true --label "traefik.enable=false" --rm -it rails sh -c "$CMD"
 """
 alias = "t"
 
 [tasks.rails]
 description = "Enter the running Rails container."
-run = "docker compose exec app /bin/zsh"
+run = "docker compose exec rails /bin/zsh"
 
 [tasks.rails_tests]
 description = "Run the Rails unit tests. Pass any 'rails test' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up"]
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails test (e.g. test/models/foo.rb:42, -n /pattern/, --seed 123)"'
 run = """
-  if docker compose ps --services --filter "status=running" | grep -q '^app$'; then
-    docker compose exec app bin/rails test $usage_args
+  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
+    docker compose exec rails bin/rails test $usage_args
   else
-    docker compose run --label "traefik.enable=false" --rm app bin/rails test $usage_args
+    docker compose run --label "traefik.enable=false" --rm rails bin/rails test $usage_args
   fi
 """
 alias = "rt"
@@ -59,10 +59,10 @@ run = """
     *_test.rb*) test_target="test $usage_args" ;;
     *)          test_target="test:system $usage_args" ;;
   esac
-  if docker compose ps --services --filter "status=running" | grep -q '^app$'; then
-    docker compose exec app bin/rails $test_target
+  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
+    docker compose exec rails bin/rails $test_target
   else
-    docker compose run --label "traefik.enable=false" --rm app bin/rails $test_target
+    docker compose run --label "traefik.enable=false" --rm rails bin/rails $test_target
   fi
 """
 alias = "rst"
@@ -71,10 +71,10 @@ alias = "rst"
 description = "Enter the Rails console. Any args are forwarded to bin/rails console (e.g. -e production, --sandbox)."
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails console (e.g. -e production, --sandbox)"'
 run = """
-  if docker compose ps --services --filter "status=running" | grep -q '^app$'; then
-    docker compose exec app bin/rails console $usage_args
+  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
+    docker compose exec rails bin/rails console $usage_args
   else
-    docker compose run -e DISABLE_LOGCRAFT=true --label "traefik.enable=false" --rm -it app bin/rails console $usage_args
+    docker compose run -e DISABLE_LOGCRAFT=true --label "traefik.enable=false" --rm -it rails bin/rails console $usage_args
   fi
 """
 alias = "c"
@@ -132,7 +132,7 @@ run = """
 
 [tasks.ci]
 description = "Run the CI linting and tests."
-run = "docker compose run --label \"traefik.enable=false\" app bundle exec rake ci:build:commit"
+run = "docker compose run --label \"traefik.enable=false\" rails bundle exec rake ci:build:commit"
 
 [tasks.wt]
 description = "Create a worktree: mise run wt <branch|PR#|new-branch-name>"

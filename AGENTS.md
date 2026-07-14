@@ -49,9 +49,9 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 
 ## Docker stack (.docker-config/compose.yml)
 
-- app — build rails target; mount ../<slug>:/app + base .git (ro); shared volumes; redis/db unix sockets via  
+- rails — build rails target; mount ../<slug>:/app + base .git (ro); shared volumes; redis/db unix sockets via  
   ${SOCKET_DIR}; Traefik route WORKTREE_HOST→:3000; entrypoint entrypoint-app.sh then bin/dev.  
-  app/nvim/playwright/claude use shared image: tags (${PROJECT_PREFIX}/rails:ruby<ver>-node<ver> etc.) —  
+  rails/nvim/playwright/claude use shared image: tags (${PROJECT_PREFIX}/rails:ruby<ver>-node<ver> etc.) —  
   one image per runtime combo across worktrees, not one per compose project.
 - db — postgres:16, optimized (fsync off, autovacuum off); port 127.0.0.1:${DB_PORT}:5432; initdb/restore-dump.sh
   run on init.
@@ -93,7 +93,7 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
 
 - up(u)/down/stop(s)/destroy: lifecycle. up check external volumes + clear postgres socket + start proxy. down  
   remove volumes. destroy nuke all filial[-_]\* resources + folder (confirm prompt).
-- rails/console(c)/test(t)/rails_tests(rt)/rails_system_tests(rst)/ci: exec into app or docker compose run. Add  
+- rails/console(c)/test(t)/rails_tests(rt)/rails_system_tests(rst)/ci: exec into the rails service or docker compose run. Add  
   --label traefik.enable=false for non-routed tasks (avoid 502).
 - nvim(v), claude(ai)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
 
