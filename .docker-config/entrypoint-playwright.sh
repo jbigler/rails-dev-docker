@@ -75,6 +75,9 @@ PREFS
 # Keep Chromium off https for the plain-http dev server. Managed policy instead
 # of --disable-features: the feature names churn across Chromium versions
 # (HttpsUpgrades, HttpsFirstBalancedMode*, ...) while the policy API is stable.
+# BuiltInDnsClientEnabled=false forces the system resolver (Docker DNS) — the
+# async DNS client's direct upstream queries hit the egress firewall and stall
+# navigation until they time out.
 # Both dirs covered — Chromium reads /etc/chromium, Chrome-branded builds
 # /etc/opt/chrome.
 for policy_dir in /etc/chromium/policies/managed /etc/opt/chrome/policies/managed; do
@@ -83,7 +86,8 @@ for policy_dir in /etc/chromium/policies/managed /etc/opt/chrome/policies/manage
 {
   "HttpsOnlyMode": "disallowed",
   "HttpsUpgradesEnabled": false,
-  "HttpAllowlist": ["rails"]
+  "HttpAllowlist": ["rails"],
+  "BuiltInDnsClientEnabled": false
 }
 POLICY
 done
