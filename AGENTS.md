@@ -32,7 +32,9 @@ mise run wt <branch|PR#|new-branch> → .scripts/create-worktree.sh:
 mise run wt:rm <branch|dir> → .scripts/remove-worktree.sh: reject base;  
 reject dirty worktree unless FORCE=1; down compose project (down -v --rmi local);  
 force-remove lingering containers/volumes/networks/images via label;  
-delete ports.registry line; remove mise trust symlinks; rm -rf dir; git worktree prune.
+delete ports.registry line; remove mise trust symlinks; scoped `git worktree remove --force`  
+(never a blanket `git worktree prune` — see Gotchas). Aborts up front if any registered worktree  
+dir is missing (partial filesystem view, e.g. the container).
 
 mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 
@@ -128,6 +130,13 @@ noVNC; watch at http://vnc.<worktree>.localhost.
 
 ## Gotchas
 
+- NEVER run `git worktree prune` (and never `git worktree remove` on a path you don't own) from inside a  
+  dockerized claude instance, or any other partial filesystem view. Only master/ + the current worktree are  
+  mounted, and admin entries store absolute host paths — prune sees every unmounted sibling as dead and purges  
+  the whole registry, disconnecting all worktrees from their branches. Worktree removal goes through  
+  `mise run wt:rm` only (host), which is scoped and guards against partial views. To recover a purged registry:  
+  rebuild each master/.git/worktrees/<name>/ (commondir `../..`, gitdir → the worktree's .git file, HEAD → its  
+  branch), then `git worktree repair` and `git reset` in each worktree.
 - macOS virtiofs: bound unix sockets can't be chowned → entrypoints clear stale artifacts on boot.
 - mise resolution: base worktree must live under wrapper root (adopt.sh moves + symlinks).
 - init-firewall.sh: allowlist egress; codeload.github.com added for non-standard infra domains.

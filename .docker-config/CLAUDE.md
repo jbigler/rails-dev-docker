@@ -28,3 +28,18 @@ connects through a local CDP bridge on 127.0.0.1:9222).
   interferes with running tests.
 - If the browser gets closed, it relaunches automatically within ~1s;
   just retry.
+
+# Git worktrees — NEVER prune from inside this container
+
+You are running inside a container that mounts ONLY this worktree (plus the
+base repo). The other sibling worktrees are NOT mounted, and git records each
+worktree by its absolute host path.
+
+- NEVER run `git worktree prune`. It deletes the admin entry of every worktree
+  whose directory it can't find — and from in here that is ALL of them. It
+  purges the whole registry and disconnects every worktree from its branch.
+- NEVER run `git worktree remove`, `git worktree add`, or `rm -rf` on any
+  worktree, or edit anything under `.git/worktrees/`.
+- Worktree creation and removal happen on the HOST via `mise run wt` /
+  `mise run wt:rm`. If a worktree needs adding or removing, ask the human to
+  do it from the host — do not attempt it yourself.
