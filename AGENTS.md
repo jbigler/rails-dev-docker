@@ -130,13 +130,12 @@ noVNC; watch at http://vnc.<worktree>.localhost.
 
 ## Gotchas
 
-- NEVER run `git worktree prune` (and never `git worktree remove` on a path you don't own) from inside a  
-  dockerized claude instance, or any other partial filesystem view. Only master/ + the current worktree are  
-  mounted, and admin entries store absolute host paths — prune sees every unmounted sibling as dead and purges  
-  the whole registry, disconnecting all worktrees from their branches. Worktree removal goes through  
-  `mise run wt:rm` only (host), which is scoped and guards against partial views. To recover a purged registry:  
-  rebuild each master/.git/worktrees/<name>/ (commondir `../..`, gitdir → the worktree's .git file, HEAD → its  
-  branch), then `git worktree repair` and `git reset` in each worktree.
+- Worktree removal must stay scoped. `git worktree prune` deletes the admin entry of every worktree whose dir  
+  isn't found on disk — from a partial filesystem view (e.g. a container mounting only master/ + one worktree)  
+  that is ALL of them, purging the whole registry and disconnecting every worktree from its branch. wt:rm uses  
+  scoped `git worktree remove` and aborts on a partial view; keep it that way, never a blanket prune. To recover  
+  a purged registry: rebuild each master/.git/worktrees/<name>/ (commondir `../..`, gitdir → the worktree's .git  
+  file, HEAD → its branch), then `git worktree repair` and `git reset` in each worktree.
 - macOS virtiofs: bound unix sockets can't be chowned → entrypoints clear stale artifacts on boot.
 - mise resolution: base worktree must live under wrapper root (adopt.sh moves + symlinks).
 - init-firewall.sh: allowlist egress; codeload.github.com added for non-standard infra domains.
