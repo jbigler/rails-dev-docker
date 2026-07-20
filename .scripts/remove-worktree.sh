@@ -38,6 +38,25 @@ if [ -d "${worktree_dir}/.git" ]; then
   exit 1
 fi
 
+# Safety: refuse to run when git's worktree view is incomplete. Inside the
+# claude container the sibling worktrees are not mounted at their registered
+# host paths, so any prune-like operation would see every absent directory as
+# a dead worktree and purge the entire registry (disconnecting all worktrees).
+# Only proceed when every registered worktree path actually exists on disk.
+missing=""
+while read -r wt; do
+  [ -n "$wt" ] || continue
+  [ -d "$wt" ] || missing="${missing}"$'\n'"  ${wt}"
+done < <(run_git worktree list --porcelain | sed -n 's/^worktree //p')
+if [ -n "$missing" ]; then
+  echo "Error: Refusing to remove — git reports worktrees whose directories are missing:" >&2
+  echo "$missing" >&2
+  echo "" >&2
+  echo "This means you are in a partial filesystem view (e.g. the claude container)." >&2
+  echo "Run 'mise run wt:rm' on the host, where all worktrees are present." >&2
+  exit 1
+fi
+
 # Refuse to remove a worktree with uncommitted or unstaged changes —
 # removal is destructive (rm -rf) and would lose that work. The user can
 # override with FORCE=1 if they really want to discard the changes.
@@ -120,10 +139,20 @@ for subdir in tracked-configs trusted-configs; do
   done
 done
 
-# Remove the worktree
+# Remove the worktree. Use the scoped 'git worktree remove' — it deletes only
+# this worktree's directory and its single admin entry. Never use a blanket
+# 'git worktree prune', which sweeps every entry whose path is not currently
+# visible and can purge unrelated worktrees. --force is required because the
+# per-worktree seed files (mise.local.toml, etc.) are always untracked; the
+# tracked/staged dirty check above already guards the user's real work.
 echo "Removing worktree directory..."
-rm -rf "$worktree_dir"
-run_git worktree prune
+if ! run_git worktree remove --force "$worktree_dir"; then
+  # Fallback: the directory is not a git-tracked worktree (already orphaned).
+  # Remove the directory and ONLY this worktree's admin entry — never a prune.
+  echo "Not tracked by git; removing directory and its admin entry directly..."
+  rm -rf "$worktree_dir"
+  rm -rf "${git_dir}/worktrees/${clean_name}"
+fi
 
 base_name=$(find_base_worktree_name)
 base_dir="${root}/${base_name}"
