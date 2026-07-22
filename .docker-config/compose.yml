@@ -183,8 +183,13 @@ services:
       args:
         PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.60.0}
     shm_size: "1gb"
-    ipc: host
     init: true
+    deploy:
+      resources:
+        reservations:
+          cpus: "2"
+        limits:
+          cpus: "4"
     # Expose the browser server to the host (loopback only) so system tests run
     # ON THE HOST can connect to this containerized browser. Port is per-worktree.
     ports:

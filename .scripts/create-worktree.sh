@@ -89,7 +89,19 @@ if run_git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
 elif run_git show-ref --verify --quiet "refs/remotes/origin/${branch}" 2>/dev/null; then
   run_git worktree add "$worktree_dir" "$branch"
 else
-  base_branch=$(run_git symbolic-ref --short HEAD)
+  # Base new branches off the repository's default branch, not whatever the
+  # base worktree happens to have checked out. Prefer origin/HEAD; fall back
+  # to a local main/master, then to the current HEAD as a last resort.
+  base_branch=$(run_git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+  if [ -z "$base_branch" ]; then
+    for candidate in main master; do
+      if run_git show-ref --verify --quiet "refs/heads/${candidate}"; then
+        base_branch="$candidate"
+        break
+      fi
+    done
+  fi
+  base_branch="${base_branch:-$(run_git symbolic-ref --short HEAD)}"
   echo "Branch '${branch}' not found locally or on remote."
   echo "Creating new branch based on ${base_branch}..."
   run_git worktree add -b "$branch" "$worktree_dir" "$base_branch"
