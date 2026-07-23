@@ -11,6 +11,15 @@
 
 @CLAUDE.local.md
 
+# Shell — this container runs zsh, not bash
+
+Your interactive and command-running shell is **zsh** (`/bin/zsh`), not bash.
+When writing shell commands, avoid bash-only constructs that zsh treats
+differently (e.g. 0- vs 1-based `${arr[0]}` array indexing, `shopt`,
+bash-specific `read`/`declare` flags, `set -o pipefail` availability). Prefer
+POSIX-portable syntax, or invoke `bash -c '...'` explicitly when a snippet
+genuinely needs bash.
+
 # Browser access (chrome-devtools MCP)
 
 A dedicated interactive Chromium runs in the `playwright` container and is
