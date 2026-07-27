@@ -92,6 +92,11 @@ services:
     env_file: .env
     environment:
       POSTGRES_PASSWORD: ${PGPASSWORD:-password}
+    # Parallel query DSM segments come out of /dev/shm. The aggressive parallel
+    # settings below (max_parallel_workers_per_gather=4, zeroed parallel costs)
+    # make parallel plans routine, and Docker's 64mb default is too small —
+    # exhaustion surfaces as "could not resize shared memory segment".
+    shm_size: 256mb
     # Publish Postgres on a per-worktree host port so host-side `bin/rails`/`psql`
     # can reach this worktree's DB over TCP (bound to localhost only).
     ports:
