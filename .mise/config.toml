@@ -189,17 +189,16 @@ run = """
 """
 
 [tasks.claude]
-description = "Run Claude AI assistant. Opens in a new Kitty tab if running inside Kitty, otherwise runs in the current terminal."
+description = "Run Claude AI assistant in the current terminal window. Set CLAUDE_NEW_TERM=1 (or run claude:newterm) to open it in a new terminal tab instead."
 usage = 'arg "[args]…" var=#true default=""'
 run = """
   args="${usage_args:-}"
   [ "$args" = "''" ] && args=
   set -- $args
-  if [ -n "${KITTY_PID:-}" ] && command -v kitty >/dev/null 2>&1; then
-    kitty @ launch --type=tab --cwd=current --tab-title=Claude --copy-env=yes -- docker compose run --rm claude "$@"
-  else
-    docker compose run --rm claude "$@"
-  fi
+  case "${CLAUDE_NEW_TERM:-}" in
+    ""|0|false|no) exec docker compose run --rm claude "$@" ;;
+  esac
+  exec ./.scripts/claude-newterm.sh "$@"
 """
 alias = "ai"
 

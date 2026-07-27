@@ -97,7 +97,13 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
   remove volumes. destroy nuke all filial[-_]\* resources + folder (confirm prompt).
 - rails/console(c)/test(t)/rails_tests(rt)/rails_system_tests(rst)/ci: exec into the rails service or docker compose run. Add  
   --label traefik.enable=false for non-routed tasks (avoid 502).
-- nvim(v), claude(ai)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
+- nvim(v), claude(ai)/claude:newterm(ai:newterm)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
+- claude runs in the current window; CLAUDE_NEW_TERM=1 or claude:newterm delegates to
+  .scripts/claude-newterm.sh, which detects the host terminal (env fingerprint, then process tree) then
+  escalates: new tab (tmux/kitty/wezterm/konsole/gnome-terminal/xfce4-terminal/terminator/iTerm2) → new
+  window of that same terminal → new window of any emulator found ($TERMINAL first, then kitty, wezterm,
+  ghostty, alacritty, foot, konsole, gnome-terminal, xfce4-terminal, terminator, xterm) → current window
+  only when nothing is launchable (no emulator, or no DISPLAY/WAYLAND_DISPLAY off macOS).
 
 ## Host-side Rails DB access
 

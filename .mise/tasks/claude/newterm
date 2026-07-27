@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run Claude in a new tab of the current terminal (falls back to the current window)."
+#MISE alias="ai:newterm"
+
+# Note: The "run" script path is relative to the project root
+./.scripts/claude-newterm.sh "$@"
