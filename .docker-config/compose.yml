@@ -170,6 +170,9 @@ services:
     env_file: .env
     environment:
       GEM_VOLUME: ${GEM_VOLUME}
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      DOMAIN: ${WORKTREE_HOST}
+      WORKTREE_NAME: ${CURRENT_WORKTREE_NAME}
     networks:
       - dev
     # Loopback only — nvim RPC allows arbitrary command execution.
@@ -285,7 +288,7 @@ services:
         RUBY_VERSION: ${RUBY_VERSION}
         NODE_VERSION: ${NODE_VERSION}
         CLAUDE_CODE_VERSION: "latest"
-        GIT_DELTA_VERSION: "0.18.2"
+        GIT_DELTA_VERSION: "0.19.2"
     volumes:
       - ../.docker-config/home:/home/appuser
       # Worktree-specific mount point: ~/.claude/projects keys sessions by
