@@ -112,10 +112,29 @@ run = """
 """
 alias = "u"
 
+[tasks.pull]
+description = "Refresh the third-party images (postgres, redis, rustfs). Skips rails/nvim/claude/playwright — those are built locally, never pushed, so a plain 'docker compose pull' fails on them with 'pull access denied for filial/...'. Run from a worktree."
+run = "docker compose pull --ignore-buildable"
+alias = "p"
+
+[tasks.build]
+description = "Rebuild the locally built images (rails, nvim, claude, playwright) against fresh BASE images — --pull re-fetches the ruby/node/debian FROM layers instead of reusing stale cached ones. Run from a worktree."
+run = "docker compose build --pull"
+alias = "b"
+
 [tasks."proxy:up"]
 description = "Start the shared Traefik reverse proxy (one stack, all worktrees)."
 alias = "proxy"
 run = """
+  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
+  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml up -d
+"""
+
+[tasks."proxy:pull"]
+description = "Pull updated proxy images (traefik, dozzle, nginx) and recreate the proxy stack with them. All three are registry images, so no --ignore-buildable needed here."
+run = """
+  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
+  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml pull
   COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
   docker compose -f {{config_root}}/.docker-config/proxy/compose.yml up -d
 """
