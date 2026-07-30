@@ -4,6 +4,16 @@ GID = "{{exec(command='id -g')}}"
 PROJECT_PREFIX = "{{env.PROJECT_PREFIX | default(value='default')}}"
 GEM_VOLUME_BASE = "{{env.GEM_VOLUME_BASE | default(value='default_shared_gems')}}"
 SSH_PATH = "{{ env.SSH_PATH | default(value = env.HOME ~ '/.ssh') }}"
+# Host ssh-agent socket bind-mounted into the nvim/claude containers, so git
+# over SSH uses the already-unlocked host key instead of prompting for the
+# passphrase every time. Linux: the host's own $SSH_AUTH_SOCK. macOS: the host
+# socket can't cross the Docker Desktop VM boundary, so Docker Desktop exposes
+# the host agent inside the VM at the fixed path /run/host-services/ssh-auth.sock
+# (keys must be in the host agent: ssh-add --apple-use-keychain ~/.ssh/id_rsa).
+# Falls back to /dev/null when no agent is running — mounting that keeps the
+# containers startable (ssh just reports no agent) instead of failing the whole
+# `docker compose up` on an empty mount source.
+SSH_AGENT_SOCK = "{% if os() == 'macos' %}/run/host-services/ssh-auth.sock{% else %}{{ env.SSH_AUTH_SOCK | default(value='/dev/null') }}{% endif %}"
 # Proxy network subnet and Traefik's static IP on it (worktree extra_hosts
 # target). Override both in mise.local.toml when running multiple
 # PROJECT_PREFIX workspaces, or the second proxy network will fail to create.
@@ -84,12 +94,6 @@ description = "Start the application."
 depends = ["proxy:up"]
 run = """
   mkdir -p {{config_root}}/.docker-config/home/.ssh {{config_root}}/.docker-config/home/.config
-  # Clear stale Postgres socket files when db isn't running — on macOS the
-  # bind-mounted socket dir can't be chowned by a restarting container, which
-  # otherwise crashes postgres with "chown ... .s.PGSQL.5432: Invalid argument".
-  if [ -n "${SOCKET_DIR:-}" ] && ! docker compose ps --status running --services 2>/dev/null | grep -qx db; then
-    rm -f "${SOCKET_DIR}/db/.s.PGSQL."* 2>/dev/null || true
-  fi
   for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done

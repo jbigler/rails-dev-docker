@@ -52,60 +52,52 @@ services:
       - ../.docker-config/home:/home/appuser
       - shared_gems:/usr/local/bundle
       - node_modules:/app/node_modules
-      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
-      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
     entrypoint: ["entrypoint-app.sh"]
     command: ["bin/dev"]
 
   redis:
-    image: redis:7-alpine
-    # Remove any stale unix socket before the image entrypoint chowns /data —
-    # chown on a socket file fails with EINVAL on macOS (virtiofs) bind mounts,
-    # which crash-loops redis after an unclean shutdown.
-    entrypoint:
-      [
-        "sh",
-        "-c",
-        'rm -f /data/socket/redis.sock; exec docker-entrypoint.sh "$@"',
-        "--",
-      ]
-    volumes:
-      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
+    image: redis:8-alpine
     networks:
       - dev
+    # TCP on the `dev` network only — not published to the host. Reachable at
+    # redis://redis:6379 (see REDIS_URL in .env).
     command: >
       redis-server
-      --unixsocket /data/socket/redis.sock
-      --unixsocketperm 777
-      --port 0
       --loglevel warning
       --save ''
       --appendonly no
     healthcheck:
-      test: ["CMD", "redis-cli", "-s", "/data/socket/redis.sock", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
 
   db:
     image: postgres:16
-    env_file: .env
+    # No env_file: .env — that file is written for the app containers and sets
+    # PGHOST=db, which breaks the initdb.d scripts in here (during first-start
+    # init the server listens on its local socket only, so createdb/psql get
+    # "Connection refused"). Everything db actually needs is explicit below;
+    # local connections authenticate as the container's own postgres OS user.
     environment:
       POSTGRES_PASSWORD: ${PGPASSWORD:-password}
+      # Match the app containers so timestamps agree across the stack.
+      TZ: Asia/Bangkok
+      PGTZ: Asia/Bangkok
     # Parallel query DSM segments come out of /dev/shm. The aggressive parallel
     # settings below (max_parallel_workers_per_gather=4, zeroed parallel costs)
     # make parallel plans routine, and Docker's 64mb default is too small —
     # exhaustion surfaces as "could not resize shared memory segment".
     shm_size: 256mb
     # Publish Postgres on a per-worktree host port so host-side `bin/rails`/`psql`
-    # can reach this worktree's DB over TCP (bound to localhost only).
+    # can reach this worktree's DB over TCP (bound to localhost only). Containers
+    # reach it at db:5432 over the `dev` network (see PGHOST/PGPORT in .env).
     ports:
       - "127.0.0.1:${DB_PORT:-55432}:5432"
     networks:
       - dev
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ../.docker-config/initdb/restore-dump.sh:/docker-entrypoint-initdb.d/restore-dump.sh:ro
       - ${DB_DUMP_DIR:-../.docker-config/db-dumps}:/db-dumps:ro
     command: >
@@ -161,10 +153,8 @@ services:
       - shared_gems:/usr/local/bundle
       - node_modules:/app/node_modules
       - ${SSH_PATH}:/home/appuser/.ssh:ro
-      - ${SSH_AUTH_SOCK}:/tmp/ssh-agent.sock:ro
+      - ${SSH_AGENT_SOCK:-/dev/null}:/tmp/ssh-agent.sock:ro
       - ../.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
-      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
-      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
     tty: true
     stdin_open: true
@@ -313,10 +303,8 @@ services:
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
       - shared_gems:/usr/local/bundle
       - node_modules:/app-${CURRENT_WORKTREE_NAME}/node_modules
-      - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
-      - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
       - ${SSH_PATH}:/home/appuser/.ssh:ro
-      - ${SSH_AUTH_SOCK}:/tmp/ssh-agent.sock:ro
+      - ${SSH_AGENT_SOCK:-/dev/null}:/tmp/ssh-agent.sock:ro
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
     working_dir: /app-${CURRENT_WORKTREE_NAME}
     tty: true

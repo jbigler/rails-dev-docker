@@ -51,13 +51,14 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 
 ## Docker stack (.docker-config/compose.yml)
 
-- rails — build rails target; mount ../<slug>:/app + base .git (ro); shared volumes; redis/db unix sockets via  
-  ${SOCKET_DIR}; Traefik route WORKTREE_HOST→:3000; entrypoint entrypoint-app.sh then bin/dev.  
+- rails — build rails target; mount ../<slug>:/app + base .git (ro); shared volumes; db/redis over TCP  
+  (PGHOST=db, REDIS_URL=redis://redis:6379/1 in .env); Traefik route WORKTREE_HOST→:3000; entrypoint  
+  entrypoint-app.sh then bin/dev.  
   rails/nvim/playwright/claude use shared image: tags (${PROJECT_PREFIX}/rails:ruby<ver>-node<ver> etc.) —  
   one image per runtime combo across worktrees, not one per compose project.
 - db — postgres:16, optimized (fsync off, autovacuum off); port 127.0.0.1:${DB_PORT}:5432; initdb/restore-dump.sh
   run on init.
-- redis — unix socket only (--port 0), clear stale on boot.
+- redis — TCP 6379 on the dev network only, not published to the host; no persistence (--save '' --appendonly no).
 - playwright — Dockerfile.playwright; run chromium.launchServer (headed via Xvfb + x11vnc+noVNC);  
   HEADLESS_SYSTEM_TESTS=1 for headless. server-side logic decides mode. Publish  
   127.0.0.1:${PLAYWRIGHT_HOST_PORT}:8888. Also run second interactive Chromium (always headed, same  
@@ -93,7 +94,7 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
 
 ## mise tasks (.mise/config.toml)
 
-- up(u)/down/stop(s)/destroy: lifecycle. up check external volumes + clear postgres socket + start proxy. down  
+- up(u)/down/stop(s)/destroy: lifecycle. up check external volumes + start proxy. down  
   remove volumes. destroy nuke all filial[-_]\* resources + folder (confirm prompt).
 - rails/console(c)/test(t)/rails_tests(rt)/rails_system_tests(rst)/ci: exec into the rails service or docker compose run. Add  
   --label traefik.enable=false for non-routed tasks (avoid 502).
@@ -109,7 +110,7 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
 
 db publishes on 127.0.0.1:${DB_PORT}. Template sets host-shell only                                               
 PGHOST=127.0.0.1/PGPORT=${DB_PORT}/PGUSER/PGPASSWORD. Host bin/rails/psql reach container DB via TCP. Inside  
-containers, .docker-config/.env wins (unix socket). System tests run on host against container browser  
+containers, .docker-config/.env wins (PGHOST=db over the dev network). System tests run on host against container browser  
 (PLAYWRIGHT_HOST=ws://localhost:port, APP_HOST=host.docker.internal).
 
 ## System tests (Playwright over VNC)
@@ -142,6 +143,10 @@ noVNC; watch at http://vnc.<worktree>.localhost.
   scoped `git worktree remove` and aborts on a partial view; keep it that way, never a blanket prune. To recover  
   a purged registry: rebuild each master/.git/worktrees/<name>/ (commondir `../..`, gitdir → the worktree's .git  
   file, HEAD → its branch), then `git worktree repair` and `git reset` in each worktree.
-- macOS virtiofs: bound unix sockets can't be chowned → entrypoints clear stale artifacts on boot.
+- ssh-agent into nvim/claude: SSH_AGENT_SOCK (.mise/config.toml) picks the host socket per OS — $SSH_AUTH_SOCK on  
+  Linux, /run/host-services/ssh-auth.sock on macOS (host sockets don't cross the Docker Desktop VM boundary;  
+  Docker Desktop re-exposes the agent at that fixed path). Mac users must load the key into the host agent  
+  (ssh-add --apple-use-keychain ~/.ssh/id_rsa). No agent → /dev/null mount, containers still start, ssh just  
+  reports no agent and falls back to a passphrase prompt.
 - mise resolution: base worktree must live under wrapper root (adopt.sh moves + symlinks).
 - init-firewall.sh: allowlist egress; codeload.github.com added for non-standard infra domains.
