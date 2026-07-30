@@ -65,6 +65,7 @@ RUN apt-get update -qq && \
   ca-certificates \
   ffmpeg \
   libvips \
+  libvips-tools \
   libimage-exiftool-perl \
   imagemagick \
   pkg-config \
