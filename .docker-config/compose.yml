@@ -161,6 +161,7 @@ services:
       - shared_gems:/usr/local/bundle
       - node_modules:/app/node_modules
       - ${SSH_PATH}:/home/appuser/.ssh:ro
+      - ${SSH_AUTH_SOCK}:/tmp/ssh-agent.sock:ro
       - ../.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ${SOCKET_DIR:-/tmp/sockets}/redis:/data/socket
       - ${SOCKET_DIR:-/tmp/sockets}/db:/var/run/postgresql
@@ -170,6 +171,10 @@ services:
     env_file: .env
     environment:
       GEM_VOLUME: ${GEM_VOLUME}
+      # Host ssh-agent, forwarded via the socket mount above: git over SSH in
+      # nvim/lazygit uses the already-unlocked host key instead of prompting for
+      # the passphrase on every push/fetch.
+      SSH_AUTH_SOCK: /tmp/ssh-agent.sock
       RUSTFS_ENDPOINT: http://rustfs:9000
       DOMAIN: ${WORKTREE_HOST}
       WORKTREE_NAME: ${CURRENT_WORKTREE_NAME}
