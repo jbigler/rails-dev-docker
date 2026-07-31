@@ -290,6 +290,10 @@ services:
         NODE_VERSION: ${NODE_VERSION}
         CLAUDE_CODE_VERSION: "latest"
         GIT_DELTA_VERSION: "0.19.2"
+    deploy:
+      resources:
+        limits:
+          cpus: "10"
     volumes:
       - ../.docker-config/home:/home/appuser
       # Worktree-specific mount point: ~/.claude/projects keys sessions by
