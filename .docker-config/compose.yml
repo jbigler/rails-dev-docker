@@ -266,6 +266,12 @@ services:
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-s3-ui.entrypoints=web"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-s3-ui.service=${COMPOSE_PROJECT_NAME}-s3-ui"
       - "traefik.http.services.${COMPOSE_PROJECT_NAME}-s3-ui.loadbalancer.server.port=9001"
+      # RustFS serves the console at /rustfs/console/index.html; a bare `/` on
+      # port 9001 falls through to the S3 API handler and answers 403
+      # AccessDenied (unsigned request). Redirect the host root to the console.
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-s3-ui.middlewares=${COMPOSE_PROJECT_NAME}-s3-ui-root"
+      - "traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-s3-ui-root.redirectregex.regex=^http://([^/]+)/?$$"
+      - "traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-s3-ui-root.redirectregex.replacement=http://$${1}/rustfs/console/index.html"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 5s
