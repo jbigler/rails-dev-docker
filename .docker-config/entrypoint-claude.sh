@@ -4,10 +4,37 @@ set -euo pipefail
 # Run firewall setup as root via sudo (allowed by /etc/sudoers.d/firewall)
 sudo /usr/local/bin/init-firewall.sh
 
-# Configure MCP servers idempotently — the user-scope config lives in the
-# home bind mount shared by every worktree's claude container, so a blind
-# remove/re-add on each boot races concurrent boots.
-CLAUDE_JSON="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json"
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+SHARED_DIR="$HOME/.claude"
+
+# Seed this worktree's config dir on first boot from the shared one. The
+# account record and onboarding flags carry over so first use only needs
+# /login; .credentials.json deliberately does not, because one refresh token
+# shared across containers is exactly the bug this split exists to fix.
+if [ ! -d "$CONFIG_DIR" ]; then
+  mkdir -p "$CONFIG_DIR"
+  for seed in .claude.json settings.json; do
+    if [ -f "$SHARED_DIR/$seed" ]; then
+      cp "$SHARED_DIR/$seed" "$CONFIG_DIR/$seed"
+    fi
+  done
+fi
+
+# Link back the pieces that should stay global. The links are relative to the
+# config dir's own location (~/.claude-worktrees/<name>), so they resolve
+# identically on the host and in the container, and a teardown `rm -rf` of the
+# worktree dir drops the link, never the target.
+if [ "$CONFIG_DIR" != "$SHARED_DIR" ]; then
+  for global in plugins agents hooks; do
+    if [ ! -L "$CONFIG_DIR/$global" ] && [ ! -d "$CONFIG_DIR/$global" ] && [ -d "$SHARED_DIR/$global" ]; then
+      ln -s "../../.claude/$global" "$CONFIG_DIR/$global"
+    fi
+  done
+fi
+
+# Configure MCP servers idempotently — .claude.json is per-worktree now, but
+# the guard still earns its keep by not rewriting the file on every boot.
+CLAUDE_JSON="$CONFIG_DIR/.claude.json"
 [ -f "$CLAUDE_JSON" ] || echo '{}' > "$CLAUDE_JSON"
 
 # Pre-trust this worktree's project dir. The mount point is per-worktree
@@ -40,9 +67,8 @@ if ! jq -e '.mcpServers["chrome-devtools"]' "$CLAUDE_JSON" >/dev/null 2>&1; then
 fi
 
 # Register the status hook (claude badge on the wt.localhost dashboard)
-# idempotently — settings.json lives in the same shared home mount, so only
-# touch it when the hook is missing.
-SETTINGS_JSON="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+# idempotently — only touch settings.json when the hook is missing.
+SETTINGS_JSON="$CONFIG_DIR/settings.json"
 [ -f "$SETTINGS_JSON" ] || echo '{}' > "$SETTINGS_JSON"
 if ! grep -q claude-status-hook "$SETTINGS_JSON"; then
   tmp="${SETTINGS_JSON}.tmp.$$"
@@ -56,9 +82,10 @@ fi
 # Refresh global memory from the committed copy (.docker-config/CLAUDE.md).
 # Plain copy, not a bind mount at this path: rtk init rewrites CLAUDE.md via
 # temp-file + rename, which fails on a file that is itself a mount point.
-cp /opt/claude/CLAUDE.md /home/appuser/.claude/CLAUDE.md
+cp /opt/claude/CLAUDE.md "$CONFIG_DIR/CLAUDE.md"
 
-# Initialize RTK (also regenerates ~/.claude/RTK.md and re-adds the @RTK.md
+# Initialize RTK (rtk honours $CLAUDE_CONFIG_DIR, so it regenerates RTK.md
+# inside this worktree's dir and re-adds the @RTK.md
 # reference to the fresh CLAUDE.md copy)
 rtk init -g --auto-patch
 

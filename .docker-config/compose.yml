@@ -323,7 +323,11 @@ services:
     environment:
       GEM_VOLUME: ${GEM_VOLUME}
       NODE_OPTIONS: "--max-old-space-size=4096"
-      CLAUDE_CONFIG_DIR: "/home/appuser/.claude"
+      # Per-worktree, not the shared ~/.claude: Claude caches credentials in
+      # memory and the OAuth refresh rotates the refresh token, so containers
+      # sharing one .credentials.json invalidate each other and force a daily
+      # re-login. The entrypoint symlinks the genuinely global pieces back.
+      CLAUDE_CONFIG_DIR: "/home/appuser/.claude-worktrees/${CURRENT_WORKTREE_NAME}"
       POWERLEVEL9K_DISABLE_GITSTATUS: "true"
       SSH_AUTH_SOCK: /tmp/ssh-agent.sock
       RUSTFS_ENDPOINT: http://rustfs:9000
