@@ -20,10 +20,25 @@ SSH_AGENT_SOCK = "{% if os() == 'macos' %}/run/host-services/ssh-auth.sock{% els
 PROXY_SUBNET = "{{env.PROXY_SUBNET | default(value='10.213.0.0/24')}}"
 TRAEFIK_IP = "{{env.TRAEFIK_IP | default(value='10.213.0.2')}}"
 NVIM_CONFIG_DIR = "{{ env.NVIM_CONFIG_DIR | default(value = env.HOME ~ '/.config/nvim') }}"
+# Light/dark mode for the nvim container, read by the Neovim config at startup.
+# The container's `nvim --headless --listen` server has no UI attached when it
+# starts, so Neovim's builtin OSC 11 background detection is skipped and it would
+# otherwise always come up dark. Detected from the host terminal instead; set
+# NVIM_BACKGROUND in the environment or mise.local.toml to override.
+NVIM_BACKGROUND = "{{ exec(command = config_root ~ '/.scripts/detect-terminal-background.sh') }}"
 
 [tasks.nvim]
-description = "Connect to Neovim in the container with theme sync."
+description = "Connect to Neovim in the container."
 run = """
+  # NVIM_BACKGROUND is baked into the container's environment when it starts, so a
+  # server that has been up since before an OS theme flip is stale. Push the
+  # freshly detected mode in before attaching — mise re-runs the detector on every
+  # invocation, so this value is current. Best effort: if the server isn't up yet
+  # the --remote-ui below reports it properly.
+  if [ -n "${NVIM_BACKGROUND:-}" ]; then
+    nvim --server localhost:{{ env.NVIM_PORT }} \
+      --remote-expr "v:lua.BackgroundSet('$NVIM_BACKGROUND')" >/dev/null 2>&1 || true
+  fi
   nvim --remote-ui --server localhost:{{ env.NVIM_PORT }}
 """
 alias = "v"

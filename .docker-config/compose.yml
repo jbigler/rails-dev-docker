@@ -168,6 +168,12 @@ services:
       RUSTFS_ENDPOINT: http://rustfs:9000
       DOMAIN: ${WORKTREE_HOST}
       WORKTREE_NAME: ${CURRENT_WORKTREE_NAME}
+      # Light/dark mode for Neovim, detected from the host terminal by mise (see
+      # .scripts/detect-terminal-background.sh). The headless nvim server has no
+      # UI attached at startup, so Neovim's own OSC 11 detection never runs and it
+      # would otherwise always come up dark. This is the value at container start;
+      # the `mise run nvim` task re-pushes the current mode on every attach.
+      NVIM_BACKGROUND: ${NVIM_BACKGROUND:-dark}
     networks:
       - dev
     # Loopback only — nvim RPC allows arbitrary command execution.
