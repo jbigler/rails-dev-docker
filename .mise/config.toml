@@ -303,7 +303,19 @@ run = """
 
 [tasks.down]
 description = "Tear down the current worktree's docker resources, including its volumes (keeps the worktree folder and built images). Run from a worktree."
-run = "docker compose down --volumes --remove-orphans"
+run = """
+  set -e
+  echo "This removes this worktree's containers AND its volumes (database data will be lost)."
+  echo "To only stop the containers, run 'mise run stop' instead."
+  printf "Continue? [y/N] "
+  read -r confirm
+  case "$confirm" in
+    y|Y|yes|YES) ;;
+    *) echo "Aborted."; exit 1 ;;
+  esac
+
+  docker compose down --volumes --remove-orphans
+"""
 
 [tasks.stop]
 description = "Stop the current worktree's containers without removing them or their volumes (unlike 'down'). Resume with 'mise run up'. Leaves the shared proxy running. Run from a worktree."
