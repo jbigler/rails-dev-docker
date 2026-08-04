@@ -29,12 +29,16 @@ NVIM_BACKGROUND = "{{ exec(command = config_root ~ '/.scripts/detect-terminal-ba
 
 [tasks.nvim]
 description = "Connect to Neovim in the container."
+# No command preview — this task hands the terminal straight to the Neovim UI.
+quiet = true
+# NVIM_BACKGROUND is baked into the container's environment when it starts, so a
+# server that has been up since before an OS theme flip is stale. Push the
+# freshly detected mode in before attaching — mise re-runs the detector on every
+# invocation, so this value is current. Best effort: if the server isn't up yet
+# the --remote-ui below reports it properly.
+# (Comments live out here, not inside `run`: mise echoes the script's first line
+# as the command preview, so a leading comment is all you'd see.)
 run = """
-  # NVIM_BACKGROUND is baked into the container's environment when it starts, so a
-  # server that has been up since before an OS theme flip is stale. Push the
-  # freshly detected mode in before attaching — mise re-runs the detector on every
-  # invocation, so this value is current. Best effort: if the server isn't up yet
-  # the --remote-ui below reports it properly.
   if [ -n "${NVIM_BACKGROUND:-}" ]; then
     nvim --server localhost:{{ env.NVIM_PORT }} \
       --remote-expr "v:lua.BackgroundSet('$NVIM_BACKGROUND')" >/dev/null 2>&1 || true
@@ -76,10 +80,10 @@ alias = "rt"
 description = "Run the Rails system tests. Pass any 'rails test:system' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up"]
 usage = 'arg "[args]" var=#true help="args forwarded to the test runner (e.g. test/system/foo_test.rb:42, --seed 123)"'
+# `rails test:system` hardcodes the whole test/system dir, so when a specific test
+# file is given, run it through the `rails test` runner (which honors explicit paths).
+# Otherwise stick with `test:system` so flags like --seed/-n apply to the full suite.
 run = """
-  # `rails test:system` hardcodes the whole test/system dir, so when a specific test
-  # file is given, run it through the `rails test` runner (which honors explicit paths).
-  # Otherwise stick with `test:system` so flags like --seed/-n apply to the full suite.
   case "$usage_args" in
     *_test.rb*) test_target="test $usage_args" ;;
     *)          test_target="test:system $usage_args" ;;
