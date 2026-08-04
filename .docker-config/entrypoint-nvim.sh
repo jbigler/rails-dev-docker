@@ -6,6 +6,7 @@ mkdir -p ~/.local
 
 npm install -g mcp-hub@latest
 npm install -g @herb-tools/language-server
+npm install -g @agentclientprotocol/claude-agent-acp
 
 export GIT_TERMINAL_PROMPT=0
 
