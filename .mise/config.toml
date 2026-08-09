@@ -47,23 +47,21 @@ run = """
 """
 alias = "v"
 
-[tasks.test]
-description = "Start the Retest runner."
-depends = ["up"]
-run = """
-  CMD='gem list -i retest > /dev/null 2>&1 || gem install retest && retest --rails'
-  # `docker compose run` inherits the rails service's traefik labels + proxy network,
-  # so the one-off container registers as a second backend for the worktree host.
-  # Traefik then round-robins onto it (nothing on :3000) → 502s. Opt it out.
-  docker compose run -e DISABLE_COVERAGE=true --label "traefik.enable=false" --rm -it rails sh -c "$CMD"
-"""
-alias = "t"
-
 [tasks.rails]
 description = "Enter the running Rails container."
 run = "docker compose exec rails /bin/zsh"
 
-[tasks.rails_tests]
+[tasks.test]
+description = "Run the full local test suite: Rails unit tests then the JavaScript tests. System tests are not included — run 'test:rails_system' for those."
+# Not `depends` — mise runs dependencies in parallel, which interleaves the two
+# suites' output. An array `run` is sequential and stops at the first failure.
+run = [
+  "mise run test:rails",
+  "mise run test:javascript",
+]
+alias = "t"
+
+[tasks."test:rails"]
 description = "Run the Rails unit tests. Pass any 'rails test' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up"]
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails test (e.g. test/models/foo.rb:42, -n /pattern/, --seed 123)"'
@@ -74,9 +72,21 @@ run = """
     docker compose run --label "traefik.enable=false" --rm rails bin/rails test $usage_args
   fi
 """
-alias = "rt"
+alias = "tr"
 
-[tasks.rails_system_tests]
+[tasks."test:rails_watcher"]
+description = "Start the Retest runner — reruns the matching Rails test on every file save."
+depends = ["up"]
+run = """
+  CMD='gem list -i retest > /dev/null 2>&1 || gem install retest && retest --rails'
+  # `docker compose run` inherits the rails service's traefik labels + proxy network,
+  # so the one-off container registers as a second backend for the worktree host.
+  # Traefik then round-robins onto it (nothing on :3000) → 502s. Opt it out.
+  docker compose run -e DISABLE_COVERAGE=true --label "traefik.enable=false" --rm -it rails sh -c "$CMD"
+"""
+alias = "trw"
+
+[tasks."test:rails_system"]
 description = "Run the Rails system tests. Pass any 'rails test:system' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up"]
 usage = 'arg "[args]" var=#true help="args forwarded to the test runner (e.g. test/system/foo_test.rb:42, --seed 123)"'
@@ -94,7 +104,34 @@ run = """
     docker compose run --label "traefik.enable=false" --rm rails bin/rails $test_target
   fi
 """
-alias = "rst"
+alias = "trs"
+
+# The JS tests are Vitest + jsdom — no database, no server, no browser. They only
+# need the rails image (node + node_modules), so these tasks deliberately skip
+# `depends = ["up"]` and fall back to a one-off container when the stack is down.
+[tasks."test:javascript"]
+description = "Run the JavaScript (Vitest) tests once. Pass a file path or any vitest args (-t 'name', --reporter, ...) to run a subset."
+usage = 'arg "[args]" var=#true help="args forwarded to vitest run (e.g. test/javascript/controllers/foo_controller.test.js, -t sums-the-inputs)"'
+run = """
+  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
+    docker compose exec rails npx vitest run $usage_args
+  else
+    docker compose run --label "traefik.enable=false" --rm rails npx vitest run $usage_args
+  fi
+"""
+alias = "tj"
+
+[tasks."test:javascript_watcher"]
+description = "Start Vitest in watch mode — the JS TDD loop. Pass a file path or vitest args to narrow what it watches."
+usage = 'arg "[args]" var=#true help="args forwarded to vitest (e.g. test/javascript/controllers/foo_controller.test.js)"'
+run = """
+  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
+    docker compose exec rails npx vitest $usage_args
+  else
+    docker compose run --label "traefik.enable=false" --rm -it rails npx vitest $usage_args
+  fi
+"""
+alias = "tjw"
 
 [tasks.console]
 description = "Enter the Rails console. Any args are forwarded to bin/rails console (e.g. -e production, --sandbox)."

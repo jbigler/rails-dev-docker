@@ -96,8 +96,12 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
 
 - up(u)/down/stop(s)/destroy: lifecycle. up check external volumes + start proxy. down  
   remove volumes. destroy nuke all filial[-_]\* resources + folder (confirm prompt).
-- rails/console(c)/test(t)/rails_tests(rt)/rails_system_tests(rst)/ci: exec into the rails service or docker compose run. Add  
+- rails/console(c)/ci: exec into the rails service or docker compose run. Add  
   --label traefik.enable=false for non-routed tasks (avoid 502).
+- test(t) = test:rails then test:javascript, sequential (array run, not depends — depends is parallel).  
+  test:rails(tr)/test:rails_watcher(trw, retest)/test:rails_system(trs) forward args to bin/rails;  
+  test:javascript(tj)/test:javascript_watcher(tjw) forward args to npx vitest (Vitest + jsdom, no DB, so no depends=up).  
+  All exec into a running rails service, else docker compose run --rm.
 - nvim(v), claude(ai)/claude:newterm(ai:newterm)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
 - claude runs in the current window; CLAUDE_NEW_TERM=1 or claude:newterm delegates to
   .scripts/claude-newterm.sh, which detects the host terminal (env fingerprint, then process tree) then
