@@ -29,8 +29,14 @@ NVIM_BACKGROUND = "{{ exec(command = config_root ~ '/.scripts/detect-terminal-ba
 
 [tasks.nvim]
 description = "Connect to Neovim in the container."
+depends = ["up"]
 # No command preview — this task hands the terminal straight to the Neovim UI.
 quiet = true
+# `depends = ["up"]` only guarantees the container has *started* — `docker
+# compose up -d` returns before the headless server finishes booting and binds
+# 7777, so a cold start would hit connection refused. Poll the RPC until it
+# answers (10s cap); a warm server answers on the first try.
+#
 # NVIM_BACKGROUND is baked into the container's environment when it starts, so a
 # server that has been up since before an OS theme flip is stale. Push the
 # freshly detected mode in before attaching — mise re-runs the detector on every
@@ -39,6 +45,10 @@ quiet = true
 # (Comments live out here, not inside `run`: mise echoes the script's first line
 # as the command preview, so a leading comment is all you'd see.)
 run = """
+  for _ in $(seq 1 50); do
+    nvim --server localhost:{{ env.NVIM_PORT }} --remote-expr 1 >/dev/null 2>&1 && break
+    sleep 0.2
+  done
   if [ -n "${NVIM_BACKGROUND:-}" ]; then
     nvim --server localhost:{{ env.NVIM_PORT }} \
       --remote-expr "v:lua.BackgroundSet('$NVIM_BACKGROUND')" >/dev/null 2>&1 || true
