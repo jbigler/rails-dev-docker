@@ -170,10 +170,10 @@ run = """
   if [ -z "${PLAYWRIGHT_VERSION:-}" ]; then
     echo "WARN: PLAYWRIGHT_VERSION not derived from Gemfile.lock — playwright image uses its fallback tag and may drift from the gem (older mise.local.toml? re-render from .mise/local.toml.template)" >&2
   fi
-  # Containers stopped across a proxy-network recreation pin the old network
-  # ID and fail to start with "network <id> not found" — prune them so
-  # compose recreates them attached to the current network.
-  {{config_root}}/.scripts/prune-stale-proxy-containers.sh
+  # Stopped containers pin network IDs, so a network that was recreated or
+  # pruned while unused leaves them failing with "network <id> not found" —
+  # prune them so compose recreates them attached to the current networks.
+  {{config_root}}/.scripts/prune-stale-network-containers.sh
   docker compose up -d
 """
 alias = "u"
