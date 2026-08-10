@@ -289,6 +289,10 @@ alias = "ai"
 description = "Rebuild the Claude container with the latest Claude Code version."
 run = "docker compose build --build-arg UPDATE_CLAUDE_CODE=$(date +%s) claude"
 
+[tasks.clean]
+description = "Remove docker containers, networks, volumes and images belonging to worktrees that no longer exist. Lists what it found and asks before deleting. Leaves live worktrees and the shared base images alone."
+run = "{{config_root}}/.scripts/clean-orphan-docker-artifacts.sh"
+
 [tasks.destroy]
 description = "Remove all docker resources (containers, networks, volumes, images) for this project and delete the project folder."
 run = """

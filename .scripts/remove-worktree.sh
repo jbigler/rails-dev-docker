@@ -108,8 +108,33 @@ if [ -n "$orphan_networks" ]; then
   docker network rm $orphan_networks || true
 fi
 
-# Remove any orphaned images belonging to this project
-orphan_images=$(docker images -q --filter "label=com.docker.compose.project=$project_name")
+# Remove any orphaned images belonging to this project. The compose project
+# label alone is NOT sufficient here: compose stamps it on the shared base
+# images too (filial/rails, filial/nvim, filial/playwright, filial/claude),
+# using whichever project built them last — so filtering on the label would
+# delete the bases out from under every other worktree. An image is only ours
+# when its project + service labels reconstruct its own repository name, which
+# is compose's default naming for images it builds:
+#   filial-master-app  = filial-master + "-" + app   → ours
+#   filial/rails:...   labelled filial-master        → not ours, skipped
+# The service label has to come from `docker image inspect`: `docker images
+# --format` exposes no .Labels field and errors on it.
+orphan_image_ids=$(docker images -q --filter "label=com.docker.compose.project=$project_name" | sort -u)
+orphan_images=""
+if [ -n "$orphan_image_ids" ]; then
+  orphan_images=$(docker image inspect $orphan_image_ids \
+    --format '{{range .RepoTags}}{{.}} {{end}}	{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null \
+    | awk -F'\t' -v p="$project_name" '
+        $2 == "" { next }
+        {
+          n = split($1, tags, " ")
+          for (i = 1; i <= n; i++) {
+            if (tags[i] == "") continue
+            repo = tags[i]; sub(/:[^:]*$/, "", repo)
+            if (repo == p "-" $2) print tags[i]
+          }
+        }')
+fi
 if [ -n "$orphan_images" ]; then
   echo "Removing orphaned images..."
   docker rmi $orphan_images || true
