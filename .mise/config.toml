@@ -153,6 +153,19 @@ alias = "c"
 description = "Start the application."
 depends = ["proxy:up"]
 run = """
+  # Every worktree shares one compose file and separates itself purely through
+  # the environment, so a COMPOSE_PROJECT_NAME that disagrees with this worktree
+  # yields containers labelled for one worktree but wired to another's source
+  # tree and published ports. They then fail to start with "port is already
+  # allocated" behind a "failed to set up container networking" prefix, which
+  # reads as a network fault and sends you hunting the wrong thing. Refuse to
+  # create them instead.
+  expected_project="${PROJECT_PREFIX}-${CURRENT_WORKTREE_NAME}"
+  if [ "${COMPOSE_PROJECT_NAME:-}" != "$expected_project" ]; then
+    echo "COMPOSE_PROJECT_NAME is '${COMPOSE_PROJECT_NAME:-<unset>}' but this worktree is '${expected_project}'." >&2
+    echo "Containers would be created for another worktree. Start a fresh shell here and retry." >&2
+    exit 1
+  fi
   mkdir -p {{config_root}}/.docker-config/home/.ssh {{config_root}}/.docker-config/home/.config
   for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
