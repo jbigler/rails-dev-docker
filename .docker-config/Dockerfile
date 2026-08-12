@@ -175,7 +175,7 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt apt-get update -qq &
   apt-get install --no-install-recommends -y tree-sitter-cli xclip netbase fzf luarocks universal-ctags unzip ripgrep fzf fd-find lua5.4 
 
 # Install lazygit
-RUN wget -q -O /usr/local/bin/lazygit https://github.com/jesseduffield/lazygit/releases/download/v0.63.1/lazygit_0.63.1_Linux_x86_64.tar.gz && \
+RUN wget -q -O /usr/local/bin/lazygit https://github.com/jesseduffield/lazygit/releases/download/v0.64.1/lazygit_0.64.1_Linux_x86_64.tar.gz && \
   tar -xvf /usr/local/bin/lazygit -C /usr/local/bin
 
 RUN luarocks install dkjson
