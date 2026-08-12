@@ -61,7 +61,7 @@ Not yet triggered only because `master` happens to hold the label today.
 
 New task `clean` in `.mise/config.toml`, delegating to
 `.scripts/clean-orphan-docker-artifacts.sh`. Logic lives in `.scripts/` to match
-`create-worktree.sh` / `remove-worktree.sh` / `prune-stale-network-containers.sh`
+`create-worktree.sh` / `remove-worktree.sh` / `prune-stale-containers.sh`
 rather than inline like `destroy`. It sources `lib.sh` for `find_project_root` and
 `find_git_dir` so root detection is identical to `wt:rm`.
 

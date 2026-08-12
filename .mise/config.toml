@@ -166,8 +166,10 @@ run = """
   fi
   # Stopped containers pin network IDs, so a network that was recreated or
   # pruned while unused leaves them failing with "network <id> not found" —
-  # prune them so compose recreates them attached to the current networks.
-  {{config_root}}/.scripts/prune-stale-network-containers.sh
+  # prune them so compose recreates them attached to the current networks. Same
+  # for containers mounting another worktree's source: they publish that
+  # worktree's ports and collide with it. See the script for both cases.
+  {{config_root}}/.scripts/prune-stale-containers.sh
   docker compose up -d
 """
 alias = "u"
