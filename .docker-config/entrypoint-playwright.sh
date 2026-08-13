@@ -12,6 +12,20 @@ set -euo pipefail
 # Lock down egress before anything network-facing starts (entrypoint runs as root).
 /usr/local/bin/init-firewall-playwright.sh
 
+# Loopback shim for the *.localhost dev hostnames (WORKTREE_HOST, S3_HOST,
+# RUSTFS_UI_HOST). Chromium implements RFC 6761 itself: any name ending in
+# ".localhost" resolves to 127.0.0.1/::1 inside the browser, before the system
+# resolver runs — so this service's extra_hosts entries pointing those names at
+# Traefik are invisible to it, and e.g. a presigned RustFS URL on
+# http://s3.<worktree>.localhost/ fails with ERR_CONNECTION_REFUSED. curl does
+# the same; Ruby and Node honour /etc/hosts. Rather than fight each client,
+# make the browser's own answer correct: forward loopback :80 to Traefik, which
+# routes on the Host header exactly as it does for the host browser.
+socat TCP-LISTEN:80,bind=127.0.0.1,fork,reuseaddr TCP:"${TRAEFIK_IP:-10.213.0.2}":80 &
+if ip -6 addr show lo 2>/dev/null | grep -q '::1/128'; then
+  socat TCP6-LISTEN:80,bind=[::1],fork,reuseaddr TCP:"${TRAEFIK_IP:-10.213.0.2}":80 &
+fi
+
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
 export DISPLAY=":${DISPLAY_NUM}"
 SCREEN_GEOMETRY="${SCREEN_GEOMETRY:-1600x1000x24}"

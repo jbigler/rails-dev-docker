@@ -206,6 +206,8 @@ services:
       - "127.0.0.1:${PLAYWRIGHT_HOST_PORT:-18888}:8888"
     environment:
       HEADLESS_SYSTEM_TESTS: ${HEADLESS_SYSTEM_TESTS:-0}
+      # Target of the entrypoint's loopback :80 shim for *.localhost hosts.
+      TRAEFIK_IP: ${TRAEFIK_IP:-10.213.0.2}
     networks:
       - dev
       - proxy
