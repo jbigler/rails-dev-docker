@@ -25,9 +25,44 @@ fi
 # identically on the host and in the container, and a teardown `rm -rf` of the
 # worktree dir drops the link, never the target.
 if [ "$CONFIG_DIR" != "$SHARED_DIR" ]; then
-  for global in plugins agents hooks; do
+  for global in agents hooks; do
     if [ ! -L "$CONFIG_DIR/$global" ] && [ ! -d "$CONFIG_DIR/$global" ] && [ -d "$SHARED_DIR/$global" ]; then
       ln -s "../../.claude/$global" "$CONFIG_DIR/$global"
+    fi
+  done
+fi
+
+# Plugins are a split, not a straight link. The heavy payload (marketplace
+# clones, plugin cache, plugin data) stays shared, but the two bookkeeping
+# files are per-worktree because they store absolute paths and Claude checks
+# those paths against $CLAUDE_CONFIG_DIR as literal strings — it never resolves
+# symlinks. A single shared known_marketplaces.json pointing at
+# ~/.claude/plugins/marketplaces therefore reads as "corrupted installLocation"
+# from every worktree, and whichever worktree re-adds a marketplace rewrites the
+# path so it breaks for all the others. Seeding a rewritten copy per worktree
+# gives each one paths under its own config dir that still resolve, through the
+# subdirectory links, to the one shared clone.
+if [ "$CONFIG_DIR" != "$SHARED_DIR" ] && [ -d "$SHARED_DIR/plugins" ]; then
+  # Migrate the old whole-directory symlink.
+  if [ -L "$CONFIG_DIR/plugins" ]; then
+    rm "$CONFIG_DIR/plugins"
+  fi
+  mkdir -p "$CONFIG_DIR/plugins"
+
+  for shared in cache data marketplaces; do
+    mkdir -p "$SHARED_DIR/plugins/$shared"
+    if [ ! -e "$CONFIG_DIR/plugins/$shared" ]; then
+      ln -s "../../../.claude/plugins/$shared" "$CONFIG_DIR/plugins/$shared"
+    fi
+  done
+
+  # Seeded once, never resynced: after first boot this worktree owns its plugin
+  # set, and re-copying would clobber whatever it installed since. A marketplace
+  # added elsewhere later has to be added here too.
+  for record in known_marketplaces.json installed_plugins.json; do
+    if [ ! -f "$CONFIG_DIR/plugins/$record" ] && [ -f "$SHARED_DIR/plugins/$record" ]; then
+      sed "s|$SHARED_DIR/plugins|$CONFIG_DIR/plugins|g" \
+        "$SHARED_DIR/plugins/$record" > "$CONFIG_DIR/plugins/$record"
     fi
   done
 fi
