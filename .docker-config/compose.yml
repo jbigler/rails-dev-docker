@@ -19,7 +19,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "10"
+          cpus: "${CPUS_75:-4}"
     depends_on:
       db:
         condition: service_healthy
@@ -84,6 +84,13 @@ services:
       # Match the app containers so timestamps agree across the stack.
       TZ: Asia/Bangkok
       PGTZ: Asia/Bangkok
+    # The parallel settings below fan a single query out across cores, which on
+    # a test-suite run measures well past 200% CPU — cap it so one worktree's
+    # Postgres can't starve the rest of the stack (or the other worktrees).
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPUS_50:-4}"
     # Parallel query DSM segments come out of /dev/shm. The aggressive parallel
     # settings below (max_parallel_workers_per_gather=4, zeroed parallel costs)
     # make parallel plans routine, and Docker's 64mb default is too small —
@@ -145,6 +152,12 @@ services:
         APP_GROUP_GID: ${GID:-1000}
         RUBY_VERSION: ${RUBY_VERSION}
         NODE_VERSION: ${NODE_VERSION}
+    # Idle most of the time, but the language servers spike hard while indexing
+    # the app after a checkout or a big rebase.
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPUS_25:-2}"
     volumes:
       - ../.docker-config/home:/home/appuser
       - ${NVIM_CONFIG_DIR}:/home/appuser/.config/nvim:ro
@@ -196,10 +209,8 @@ services:
     init: true
     deploy:
       resources:
-        reservations:
-          cpus: "2"
         limits:
-          cpus: "4"
+          cpus: "${CPUS_25:-2}"
     # Expose the browser server to the host (loopback only) so system tests run
     # ON THE HOST can connect to this containerized browser. Port is per-worktree.
     ports:
@@ -260,6 +271,11 @@ services:
       - RUSTFS_CONSOLE_ENABLE=true
       - RUSTFS_ADDRESS=0.0.0.0:9000
       - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+    # Near-idle at rest; erasure-codes across its 4 volumes on every upload.
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPUS_25:-2}"
     volumes:
       - rustfs_data:/data
     networks:
@@ -302,7 +318,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "10"
+          cpus: "${CPUS_50:-4}"
     volumes:
       - ../.docker-config/home:/home/appuser
       # Worktree-specific mount point: ~/.claude/projects keys sessions by

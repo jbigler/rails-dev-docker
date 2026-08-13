@@ -26,6 +26,13 @@ NVIM_CONFIG_DIR = "{{ env.NVIM_CONFIG_DIR | default(value = env.HOME ~ '/.config
 # otherwise always come up dark. Detected from the host terminal instead; set
 # NVIM_BACKGROUND in the environment or mise.local.toml to override.
 NVIM_BACKGROUND = "{{ exec(command = config_root ~ '/.scripts/detect-terminal-background.sh') }}"
+# CPU limits for the compose services (deploy.resources), as a percentage of
+# this machine's cores instead of hardcoded counts — see .scripts/cpu-share.sh.
+# Several worktree stacks can be up at once, so no service gets the whole host;
+# override these in mise.local.toml to change the split.
+CPUS_75 = "{{ exec(command = config_root ~ '/.scripts/cpu-share.sh 75') }}"
+CPUS_50 = "{{ exec(command = config_root ~ '/.scripts/cpu-share.sh 50') }}"
+CPUS_25 = "{{ exec(command = config_root ~ '/.scripts/cpu-share.sh 25') }}"
 
 [tasks.nvim]
 description = "Connect to Neovim in the container."
