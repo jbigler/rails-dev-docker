@@ -49,9 +49,12 @@ services:
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro
       - ../.docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro
-      - ../.docker-config/home:/home/appuser
+      - ../.home/${CURRENT_WORKTREE_NAME}:/home/appuser
       - shared_gems:/usr/local/bundle
       - node_modules:/app/node_modules
+      - npm_cache:/home/appuser/.npm
+      - npm_global:/home/appuser/.npm-global
+      - playwright_browsers:/home/appuser/.cache/ms-playwright
     entrypoint: ["entrypoint-app.sh"]
     command: ["bin/dev"]
 
@@ -159,7 +162,7 @@ services:
         limits:
           cpus: "${CPUS_25:-2}"
     volumes:
-      - ../.docker-config/home:/home/appuser
+      - ../.home/${CURRENT_WORKTREE_NAME}:/home/appuser
       - ${NVIM_CONFIG_DIR}:/home/appuser/.config/nvim:ro
       - ../${CURRENT_WORKTREE_NAME}:/app
       - ${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git
@@ -169,6 +172,9 @@ services:
       - ${SSH_AGENT_SOCK:-/dev/null}:/tmp/ssh-agent.sock:ro
       - ../.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
+      - npm_cache:/home/appuser/.npm
+      - npm_global:/home/appuser/.npm-global
+      - nvim_share:/home/appuser/.local/share/nvim
     tty: true
     stdin_open: true
     env_file: .env
@@ -320,10 +326,9 @@ services:
         limits:
           cpus: "${CPUS_50:-4}"
     volumes:
-      - ../.docker-config/home:/home/appuser
-      # Worktree-specific mount point: ~/.claude/projects keys sessions by
-      # path and the home dir is shared by every worktree's claude container,
-      # so a common /app would intermix session/resume history across worktrees.
+      - ../.home/${CURRENT_WORKTREE_NAME}:/home/appuser
+      # Worktree-specific mount point: kept so host paths differ per worktree
+      # in prompts/logs even though homes are per-worktree now.
       - ../${CURRENT_WORKTREE_NAME}:/app-${CURRENT_WORKTREE_NAME}
       - ../.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro
       # Mounted, not baked into the image (repo convention): script edits
@@ -341,6 +346,10 @@ services:
       - ${SSH_PATH}:/home/appuser/.ssh:ro
       - ${SSH_AGENT_SOCK:-/dev/null}:/tmp/ssh-agent.sock:ro
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
+      - npm_cache:/home/appuser/.npm
+      - npm_global:/home/appuser/.npm-global
+      - claude_plugins_cache:/home/appuser/.claude/plugins/cache
+      - claude_plugins_marketplaces:/home/appuser/.claude/plugins/marketplaces
     working_dir: /app-${CURRENT_WORKTREE_NAME}
     tty: true
     stdin_open: true
@@ -348,11 +357,6 @@ services:
     environment:
       GEM_VOLUME: ${GEM_VOLUME}
       NODE_OPTIONS: "--max-old-space-size=4096"
-      # Per-worktree, not the shared ~/.claude: Claude caches credentials in
-      # memory and the OAuth refresh rotates the refresh token, so containers
-      # sharing one .credentials.json invalidate each other and force a daily
-      # re-login. The entrypoint symlinks the genuinely global pieces back.
-      CLAUDE_CONFIG_DIR: "/home/appuser/.claude-worktrees/${CURRENT_WORKTREE_NAME}"
       POWERLEVEL9K_DISABLE_GITSTATUS: "true"
       SSH_AUTH_SOCK: /tmp/ssh-agent.sock
       RUSTFS_ENDPOINT: http://rustfs:9000
@@ -367,17 +371,37 @@ services:
     entrypoint: ["entrypoint-claude.sh"]
 
 volumes:
-  home:
   db_data:
   rustfs_data:
   # Per-worktree (compose prefixes the project name): a single volume shared
   # across worktrees let diverging lockfiles clobber each other and concurrent
-  # boots race in `npm install`. Installs stay fast via the npm cache in the
-  # shared /home/appuser bind mount (~/.npm).
+  # boots race in `npm install`. Installs stay fast via the shared npm_cache
+  # volume (~/.npm).
   node_modules:
   shared_gems:
     external: true
     name: ${GEM_VOLUME:-shared_gems}
+  # Cross-worktree cache/install-state volumes; created and chowned by the
+  # mise `up` task (a fresh named volume mounts root-owned, and copy-from-image
+  # initialization does not work under a bind-mounted home).
+  npm_cache:
+    external: true
+    name: ${PROJECT_PREFIX}_npm_cache
+  npm_global:
+    external: true
+    name: ${PROJECT_PREFIX}_npm_global
+  nvim_share:
+    external: true
+    name: ${PROJECT_PREFIX}_nvim_share
+  playwright_browsers:
+    external: true
+    name: ${PROJECT_PREFIX}_playwright_browsers
+  claude_plugins_cache:
+    external: true
+    name: ${PROJECT_PREFIX}_claude_plugins_cache
+  claude_plugins_marketplaces:
+    external: true
+    name: ${PROJECT_PREFIX}_claude_plugins_marketplaces
 
 networks:
   dev:
