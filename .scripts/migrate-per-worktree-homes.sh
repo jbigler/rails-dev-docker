@@ -76,8 +76,16 @@ if [ -f "$old/.claude/plugins/installed_plugins.json" ] && [ ! -f "$template/.cl
     | .plugins |= with_entries(select(.value | length > 0))
   ' "$old/.claude/plugins/installed_plugins.json" > "$template/.claude/plugins/installed_plugins.json"
 fi
-if [ -f "$old/.claude.json" ] && [ ! -f "$template/.claude.json" ]; then
-  jq 'del(.projects)' "$old/.claude.json" > "$template/.claude.json"
+if [ ! -f "$template/.claude.json" ]; then
+  claude_json_src=""
+  if [ -f "$old/.claude-worktrees/master/.claude.json" ]; then
+    claude_json_src="$old/.claude-worktrees/master/.claude.json"
+  elif [ -f "$old/.claude.json" ]; then
+    claude_json_src="$old/.claude.json"
+  fi
+  if [ -n "$claude_json_src" ]; then
+    jq 'del(.projects)' "$claude_json_src" > "$template/.claude.json"
+  fi
 fi
 
 # --- 2. Per-worktree homes ----------------------------------------------
@@ -143,6 +151,12 @@ for slug in $slugs; do
       fi
     done
     echo "  carried over .claude-worktrees/$slug"
+
+    # Claude reads ~/.claude.json (home root) when CLAUDE_CONFIG_DIR is unset;
+    # the legacy split kept it inside the config dir. Promote the live copy.
+    if [ -f "$home_dir/.claude/.claude.json" ]; then
+      mv "$home_dir/.claude/.claude.json" "$home_dir/.claude.json"
+    fi
   fi
 
   # Histories are nice-to-keep, not required.

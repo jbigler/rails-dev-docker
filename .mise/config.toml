@@ -127,6 +127,7 @@ run = """
   if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
     docker compose exec rails npx vitest run $usage_args
   else
+    {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
     docker compose run --label "traefik.enable=false" --rm rails npx vitest run $usage_args
   fi
 """
@@ -139,6 +140,7 @@ run = """
   if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
     docker compose exec rails npx vitest $usage_args
   else
+    {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
     docker compose run --label "traefik.enable=false" --rm -it rails npx vitest $usage_args
   fi
 """
@@ -151,6 +153,7 @@ run = """
   if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
     docker compose exec rails bin/rails console $usage_args
   else
+    {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
     docker compose run -e DISABLE_LOGCRAFT=true --label "traefik.enable=false" --rm -it rails bin/rails console $usage_args
   fi
 """
@@ -176,15 +179,7 @@ run = """
   # Seed this worktree's home from the template if missing. Covers master
   # (create-worktree.sh never runs for it) and fresh clones; create-worktree.sh
   # does the same for new worktrees.
-  home_dir="{{config_root}}/.home/${CURRENT_WORKTREE_NAME}"
-  tmpl="{{config_root}}/.docker-config/home-template"
-  if [ ! -d "$home_dir" ]; then
-    mkdir -p "$home_dir"
-    if [ -d "$tmpl" ]; then
-      cp -a "$tmpl/." "$home_dir/"
-    fi
-    mkdir -p "$home_dir/.ssh" "$home_dir/.config"
-  fi
+  {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
   for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
   done
@@ -259,7 +254,10 @@ run = """
 
 [tasks.ci]
 description = "Run the CI linting and tests."
-run = "docker compose run --label \"traefik.enable=false\" rails bundle exec rake ci:build:commit"
+run = """
+  {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
+  docker compose run --label "traefik.enable=false" rails bundle exec rake ci:build:commit
+"""
 
 [tasks.wt]
 description = "Create a worktree: mise run wt <branch|PR#|new-branch-name>"
@@ -322,6 +320,7 @@ run = """
   args="${usage_args:-}"
   [ "$args" = "''" ] && args=
   set -- $args
+  {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
   case "${CLAUDE_NEW_TERM:-}" in
     ""|0|false|no) exec docker compose run --rm claude "$@" ;;
   esac

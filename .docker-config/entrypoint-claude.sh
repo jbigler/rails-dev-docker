@@ -12,8 +12,9 @@ CONFIG_DIR="$HOME/.claude"
 mkdir -p "$CONFIG_DIR"
 
 # Configure MCP servers idempotently — the guard avoids rewriting the file
-# on every boot.
-CLAUDE_JSON="$CONFIG_DIR/.claude.json"
+# on every boot. Claude reads this from the home root (~/.claude.json), not
+# the config dir, when CLAUDE_CONFIG_DIR is unset.
+CLAUDE_JSON="$HOME/.claude.json"
 [ -f "$CLAUDE_JSON" ] || echo '{}' > "$CLAUDE_JSON"
 
 # Pre-trust this worktree's project dir. The mount point is per-worktree
