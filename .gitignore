@@ -10,6 +10,11 @@
 /.docker-config/home-template/*
 /.docker-config/home-template/.*
 !/.docker-config/home-template/.gitkeep
+
+# Legacy shared home — still on disk until the per-worktree home migration
+# completes; keep it ignored so secrets inside can never be staged.
+/.docker-config/home/
+
 /.docker-config/db-dumps/*
 !/.docker-config/db-dumps/.gitkeep
 /.docker-config/status/*
