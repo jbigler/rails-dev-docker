@@ -173,9 +173,31 @@ run = """
     echo "Containers would be created for another worktree. Start a fresh shell here and retry." >&2
     exit 1
   fi
-  mkdir -p {{config_root}}/.docker-config/home/.ssh {{config_root}}/.docker-config/home/.config
+  # Seed this worktree's home from the template if missing. Covers master
+  # (create-worktree.sh never runs for it) and fresh clones; create-worktree.sh
+  # does the same for new worktrees.
+  home_dir="{{config_root}}/.home/${CURRENT_WORKTREE_NAME}"
+  tmpl="{{config_root}}/.docker-config/home-template"
+  if [ ! -d "$home_dir" ]; then
+    mkdir -p "$home_dir"
+    if [ -d "$tmpl" ]; then
+      cp -a "$tmpl/." "$home_dir/"
+    fi
+    mkdir -p "$home_dir/.ssh" "$home_dir/.config"
+  fi
   for vol in "$GEM_VOLUME"; do
     docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
+  done
+  # Cross-worktree cache volumes, mounted inside the bind-mounted home. A
+  # fresh named volume mounts root-owned and copy-from-image initialization
+  # cannot fix that under a bind mount, so chown once at creation — never
+  # recursively on an existing volume (warm caches stay untouched).
+  for vol in npm_cache npm_global nvim_share playwright_browsers claude_plugins_cache claude_plugins_marketplaces; do
+    name="${PROJECT_PREFIX}_${vol}"
+    if ! docker volume inspect "$name" >/dev/null 2>&1; then
+      docker volume create "$name" >/dev/null
+      docker run --rm -v "$name":/v alpine chown "$(id -u):$(id -g)" /v
+    fi
   done
   # PLAYWRIGHT_VERSION is derived from this worktree's Gemfile.lock
   # (.scripts/playwright-version.sh via mise.local.toml). When it resolves,
