@@ -13,7 +13,8 @@ dev/test stacks via mise tasks + shared Traefik proxy. Repo history unrelated to
 - .mise/config.toml — mise tasks + base env; local.toml.template rendered per worktree.
 - .mise/tasks/ — task files: wt/rm, tags.
 - .docker-config/ — compose.yml (worktree), proxy/compose.yml (Traefik), Dockerfile, Dockerfile.playwright,  
-  entrypoints, .env, initdb/, db-dumps/, init-firewall.sh.
+  entrypoints, .env, initdb/, db-dumps/, init-firewall.sh, home-template/ (seeds .home/<slug>).
+- .home/ — (git-ignored) per-worktree container home dirs, seeded from .docker-config/home-template/.
 - mise.local.toml — (root, git-ignored) set PROJECT_PREFIX, GEM_VOLUME_BASE, secrets.
 - ports.registry — slug:WORKTREE_ID; source for port assignment.
 
@@ -31,8 +32,9 @@ mise run wt <branch|PR#|new-branch> → .scripts/create-worktree.sh:
 
 mise run wt:rm <branch|dir> → .scripts/remove-worktree.sh: reject base;  
 reject dirty worktree unless FORCE=1; down compose project (down -v --rmi local);  
-force-remove lingering containers/volumes/networks/images via label;  
-delete ports.registry line; remove mise trust symlinks; scoped `git worktree remove --force`  
+force-remove lingering containers/volumes/networks/images via label; delete .home/<slug>  
+(guarded — holds a live Claude OAuth token, not just clutter); delete ports.registry line;  
+remove mise trust symlinks; scoped `git worktree remove --force`  
 (never a blanket `git worktree prune` — see Gotchas). Aborts up front if any registered worktree  
 dir is missing (partial filesystem view, e.g. the container).
 
@@ -46,7 +48,7 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 - COMPOSE_FILE = base .docker-config/compose.yml + worktree .dev/compose.yml (if present).
 - Ports: DB 55432+ID, Ruby debug 33000+ID, Neovim 17000+ID, Playwright 18888+ID.
 - GEM*VOLUME = filial_shared_gems_ruby*<ver> (common across worktrees). node_modules per worktree  
-  (compose-prefixed volume); npm cache shared via home bind mount.
+  (compose-prefixed volume); npm cache shared via the ${PROJECT_PREFIX}_npm_cache volume.
 - DEV_DB_NAME from config/database.yml via .scripts/dev-db-name.sh (postgres; empty → manual).
 
 ## Docker stack (.docker-config/compose.yml)
@@ -67,13 +69,14 @@ mise run wt:ls list worktrees; mise run wt:open [browser] open link.
   reach internet (else it bypasses claude's firewall).
 - rustfs — S3 storage, Traefik-routed.
 - claude — claude target, profile do_not_start; NET_ADMIN/NET_RAW; worktree mounted at /app-<slug>  
-  (NOT /app: ~/.claude in the shared home keys sessions by path — a common /app intermixes  
-  session/resume history across worktrees); entrypoint: init-firewall.sh, add MCP  
+  (not /app — kept so host paths differ per worktree in prompts/logs, even though homes are  
+  per-worktree now); home is a per-worktree bind mount (../.home/<slug>:/home/appuser), plain  
+  ~/.claude (no override env var); entrypoint: init-firewall.sh, add MCP  
   (pencil; chrome-devtools via socat loopback bridge 127.0.0.1:9222→playwright:9223 — CDP rejects  
   non-localhost Host header), rtk init, then claude --dangerously-skip-permissions.  
   Global memory: committed .docker-config/CLAUDE.md mounted ro → /home/appuser/.claude/CLAUDE.md  
-  (browser/MCP + rtk instructions); imports optional CLAUDE.local.md (gitignored home/.claude/) for  
-  user-local instructions.
+  (browser/MCP + rtk instructions); imports optional CLAUDE.local.md (gitignored  
+  .home/<slug>/.claude/) for user-local instructions.
 
 Volume shared_gems is external; node_modules is per-worktree. Networks: dev (bridge,  
 MTU 1400) + proxy (external, ${PROJECT_PREFIX}\_proxy).
@@ -103,6 +106,11 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
   test:javascript(tj)/test:javascript_watcher(tjw) forward args to npx vitest (Vitest + jsdom, no DB, so no depends=up).  
   All exec into a running rails service, else docker compose run --rm.
 - nvim(v), claude(ai)/claude:newterm(ai:newterm)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
+- claude:template:promote/claude:template:apply: sync the Claude config set (agents, hooks, skills,  
+  settings, plugin records) between a worktree home and .docker-config/home-template — promote pushes  
+  this worktree's config to the template (merges plugin records unless --replace); apply copies the  
+  template onto this worktree's home (or --all for every home); apply never touches credentials,  
+  sessions, or other state.
 - claude runs in the current window; CLAUDE_NEW_TERM=1 or claude:newterm delegates to
   .scripts/claude-newterm.sh, which detects the host terminal (env fingerprint, then process tree) then
   escalates: new tab (tmux/kitty/wezterm/konsole/gnome-terminal/xfce4-terminal/terminator/iTerm2) → new
