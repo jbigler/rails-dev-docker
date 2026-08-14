@@ -143,10 +143,17 @@ fi
 # Drop the dashboard's claude status file for this worktree
 rm -f "${root}/.docker-config/status/${clean_name}.json"
 
-# Drop this worktree's claude config dir. It holds a live OAuth refresh token
-# valid for weeks, so an orphaned dir is a stale credential, not just clutter.
-# The global plugins/agents/hooks inside it are symlinks; rm removes the links.
-rm -rf "${root}/.docker-config/home/.claude-worktrees/${clean_name}"
+# Drop this worktree's home. Its ~/.claude holds a live OAuth refresh token
+# valid for weeks, so an orphaned home is a stale credential, not just
+# clutter. Guard the path: only a plain name directly under .home/ may go.
+case "$clean_name" in
+  ''|.|..|*/*)
+    echo "warn: suspicious worktree name '${clean_name}'; not removing its home" >&2
+    ;;
+  *)
+    rm -rf "${root}/.home/${clean_name}"
+    ;;
+esac
 
 # Deregister ports
 REGISTRY="${root}/ports.registry"
