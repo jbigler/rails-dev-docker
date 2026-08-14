@@ -333,8 +333,8 @@ alias = "ai"
 description = "Rebuild the Claude container with the latest Claude Code version."
 run = "docker compose build --build-arg UPDATE_CLAUDE_CODE=$(date +%s) claude"
 
-[tasks."claude:plugins:promote"]
-description = "Promote a worktree's Claude marketplaces and plugins to the shared default that new worktrees are seeded from. Defaults to the current worktree, and to merging rather than replacing; pass --replace, --reseed or --yes to change that."
+[tasks."claude:template:promote"]
+description = "Promote this worktree's Claude config set (agents, hooks, skills, settings, plugin records) to the template that seeds new worktrees. Merges plugin records unless --replace; pass a worktree name to promote another worktree."
 usage = 'arg "[args]…" var=#true default=""'
 run = """
   args="${usage_args:-}"
@@ -343,7 +343,23 @@ run = """
   case "${1:-}" in
     ""|-*) set -- "$CURRENT_WORKTREE_NAME" "$@" ;;
   esac
-  exec {{config_root}}/.scripts/promote-claude-plugins.sh "$@"
+  exec {{config_root}}/.scripts/sync-claude-template.sh promote "$@"
+"""
+
+[tasks."claude:template:apply"]
+description = "Copy the template's Claude config set onto this worktree's home (or --all for every home). Never touches credentials, sessions or other state."
+usage = 'arg "[args]…" var=#true default=""'
+run = """
+  args="${usage_args:-}"
+  [ "$args" = "''" ] && args=
+  set -- $args
+  case "${1:-}" in
+    ""|-*) set -- "$CURRENT_WORKTREE_NAME" "$@" ;;
+  esac
+  case "$*" in
+    *--all*) set -- --all $(printf '%s\\n' "$@" | grep -v -e "^$CURRENT_WORKTREE_NAME$" -e "^--all$" | tr '\\n' ' ') ;;
+  esac
+  exec {{config_root}}/.scripts/sync-claude-template.sh apply "$@"
 """
 
 [tasks.clean]
