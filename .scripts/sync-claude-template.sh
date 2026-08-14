@@ -30,13 +30,15 @@ CONFIG_FILES=(settings.json keybindings.json statusline-command.sh CLAUDE.local.
 PLUGIN_RECORDS=(known_marketplaces.json installed_plugins.json)
 
 usage() {
-  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^set /p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
   exit "${1:-1}"
 }
 
 root=$(find_project_root)
 template="$root/.docker-config/home-template"
 stamp=$(date +%Y%m%d-%H%M%S)
+
+case "${1:-}" in -h|--help) usage 0 ;; esac
 
 mode="${1:-}"
 [ -n "$mode" ] && shift || usage
