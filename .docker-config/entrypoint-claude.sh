@@ -17,6 +17,14 @@ mkdir -p "$CONFIG_DIR"
 CLAUDE_JSON="$HOME/.claude.json"
 [ -f "$CLAUDE_JSON" ] || echo '{}' > "$CLAUDE_JSON"
 
+# Record the install method — the image pins a native binary under
+# /opt/claude-code, but nothing ever wrote that into the config, so /doctor
+# warns "install method is 'not set'" in every fresh home.
+if ! jq -e '.installMethod == "native"' "$CLAUDE_JSON" >/dev/null 2>&1; then
+  tmp="${CLAUDE_JSON}.tmp.$$"
+  jq '.installMethod = "native"' "$CLAUDE_JSON" > "$tmp" && mv "$tmp" "$CLAUDE_JSON"
+fi
+
 # Pre-trust this worktree's project dir. The mount point is per-worktree
 # (/app-<slug>), so without this every new worktree's first interactive
 # session stops at the "Do you trust the files in this folder?" dialog.
