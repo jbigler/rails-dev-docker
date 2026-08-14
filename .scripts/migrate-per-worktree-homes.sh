@@ -99,6 +99,14 @@ for slug in $slugs; do
   # Carry over the worktree's Claude state (sessions, credentials, settings).
   wt_claude="$old/.claude-worktrees/$slug"
   if [ -d "$wt_claude" ]; then
+    # The legacy per-worktree dirs symlink agents/hooks and plugins/{cache,
+    # data,marketplaces} into the shared home, and cp -a cannot overwrite the
+    # template's real directories with those symlinks — clear the destination
+    # counterparts first; the blocks below then replace the copied links.
+    find "$wt_claude" -maxdepth 2 -type l | while IFS= read -r link; do
+      rel="${link#"$wt_claude"/}"
+      rm -rf "$home_dir/.claude/$rel"
+    done
     cp -a "$wt_claude/." "$home_dir/.claude/"
     # The old per-worktree dirs symlinked agents/hooks and the plugin
     # cache/data/marketplaces into the shared home; those links are dead in
