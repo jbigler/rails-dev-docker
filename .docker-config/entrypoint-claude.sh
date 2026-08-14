@@ -4,71 +4,15 @@ set -euo pipefail
 # Run firewall setup as root via sudo (allowed by /etc/sudoers.d/firewall)
 sudo /usr/local/bin/init-firewall.sh
 
-CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-SHARED_DIR="$HOME/.claude"
+# The home directory is per-worktree (.home/<slug> on the host), so the
+# default ~/.claude is already isolated: credentials, sessions and plugin
+# records never cross worktrees. The plugin cache and marketplaces are
+# cross-worktree volumes mounted inside ~/.claude/plugins by compose.
+CONFIG_DIR="$HOME/.claude"
+mkdir -p "$CONFIG_DIR"
 
-# Seed this worktree's config dir on first boot from the shared one. The
-# account record and onboarding flags carry over so first use only needs
-# /login; .credentials.json deliberately does not, because one refresh token
-# shared across containers is exactly the bug this split exists to fix.
-if [ ! -d "$CONFIG_DIR" ]; then
-  mkdir -p "$CONFIG_DIR"
-  for seed in .claude.json settings.json; do
-    if [ -f "$SHARED_DIR/$seed" ]; then
-      cp "$SHARED_DIR/$seed" "$CONFIG_DIR/$seed"
-    fi
-  done
-fi
-
-# Link back the pieces that should stay global. The links are relative to the
-# config dir's own location (~/.claude-worktrees/<name>), so they resolve
-# identically on the host and in the container, and a teardown `rm -rf` of the
-# worktree dir drops the link, never the target.
-if [ "$CONFIG_DIR" != "$SHARED_DIR" ]; then
-  for global in agents hooks; do
-    if [ ! -L "$CONFIG_DIR/$global" ] && [ ! -d "$CONFIG_DIR/$global" ] && [ -d "$SHARED_DIR/$global" ]; then
-      ln -s "../../.claude/$global" "$CONFIG_DIR/$global"
-    fi
-  done
-fi
-
-# Plugins are a split, not a straight link. The heavy payload (marketplace
-# clones, plugin cache, plugin data) stays shared, but the two bookkeeping
-# files are per-worktree because they store absolute paths and Claude checks
-# those paths against $CLAUDE_CONFIG_DIR as literal strings — it never resolves
-# symlinks. A single shared known_marketplaces.json pointing at
-# ~/.claude/plugins/marketplaces therefore reads as "corrupted installLocation"
-# from every worktree, and whichever worktree re-adds a marketplace rewrites the
-# path so it breaks for all the others. Seeding a rewritten copy per worktree
-# gives each one paths under its own config dir that still resolve, through the
-# subdirectory links, to the one shared clone.
-if [ "$CONFIG_DIR" != "$SHARED_DIR" ] && [ -d "$SHARED_DIR/plugins" ]; then
-  # Migrate the old whole-directory symlink.
-  if [ -L "$CONFIG_DIR/plugins" ]; then
-    rm "$CONFIG_DIR/plugins"
-  fi
-  mkdir -p "$CONFIG_DIR/plugins"
-
-  for shared in cache data marketplaces; do
-    mkdir -p "$SHARED_DIR/plugins/$shared"
-    if [ ! -e "$CONFIG_DIR/plugins/$shared" ]; then
-      ln -s "../../../.claude/plugins/$shared" "$CONFIG_DIR/plugins/$shared"
-    fi
-  done
-
-  # Seeded once, never resynced: after first boot this worktree owns its plugin
-  # set, and re-copying would clobber whatever it installed since. A marketplace
-  # added elsewhere later has to be added here too.
-  for record in known_marketplaces.json installed_plugins.json; do
-    if [ ! -f "$CONFIG_DIR/plugins/$record" ] && [ -f "$SHARED_DIR/plugins/$record" ]; then
-      sed "s|$SHARED_DIR/plugins|$CONFIG_DIR/plugins|g" \
-        "$SHARED_DIR/plugins/$record" > "$CONFIG_DIR/plugins/$record"
-    fi
-  done
-fi
-
-# Configure MCP servers idempotently — .claude.json is per-worktree now, but
-# the guard still earns its keep by not rewriting the file on every boot.
+# Configure MCP servers idempotently — the guard avoids rewriting the file
+# on every boot.
 CLAUDE_JSON="$CONFIG_DIR/.claude.json"
 [ -f "$CLAUDE_JSON" ] || echo '{}' > "$CLAUDE_JSON"
 
@@ -119,9 +63,8 @@ fi
 # temp-file + rename, which fails on a file that is itself a mount point.
 cp /opt/claude/CLAUDE.md "$CONFIG_DIR/CLAUDE.md"
 
-# Initialize RTK (rtk honours $CLAUDE_CONFIG_DIR, so it regenerates RTK.md
-# inside this worktree's dir and re-adds the @RTK.md
-# reference to the fresh CLAUDE.md copy)
+# Initialize RTK (regenerates RTK.md inside this worktree's dir and re-adds
+# the @RTK.md reference to the fresh CLAUDE.md copy)
 rtk init -g --auto-patch
 
 # If first arg starts with '-' or no args given, run claude with skip-permissions
