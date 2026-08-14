@@ -35,3 +35,8 @@ mkdir -p \
   "$home_dir/.local/share/nvim" \
   "$home_dir/.claude/plugins/cache" \
   "$home_dir/.claude/plugins/marketplaces"
+
+# ~/.config/git/ignore is a FILE bind target — if it does not exist when a
+# container starts, the Docker daemon creates it root-owned in the home,
+# which later breaks the user-level `rm -rf .home/<slug>` in wt:rm.
+[ -e "$home_dir/.config/git/ignore" ] || touch "$home_dir/.config/git/ignore"
