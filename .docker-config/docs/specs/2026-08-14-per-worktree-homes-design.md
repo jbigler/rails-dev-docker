@@ -29,6 +29,11 @@ Docker volumes.
     directories: `.ssh`, `.npm`, `.npm-global`, `.config/nvim`,
     `.local/share/nvim`, `.cache/ms-playwright`,
     `.claude/plugins/cache`, `.claude/plugins/marketplaces`.
+  - `.claude/plugins/known_marketplaces.json` and
+    `.claude/plugins/installed_plugins.json` — the shared plugin default that
+    new worktrees are seeded from (project-scoped install records stripped).
+    Paths inside them are plain `~/.claude/plugins/...`, valid verbatim in
+    every worktree.
   - Excluded: histories, `.claude.json`, `.zcompdump*`, `.claude-worktrees/`,
     all cache contents.
   - Template contents stay untracked (only `.gitkeep`), as today.
@@ -83,6 +88,24 @@ mismatch), so container-produced artifacts stay in a container-only volume.
   rewriting.
 - The rest (firewall, MCP registration, trust pre-seed, status hook, rtk,
   CLAUDE.md refresh) is unchanged.
+
+## `claude:plugins:promote` task (`promote-claude-plugins.sh`)
+
+The task keeps its purpose — push one worktree's plugin set back to the
+default that seeds new worktrees — but simplifies:
+
+- The shared default moves from `.docker-config/home/.claude/plugins/` to
+  `.docker-config/home-template/.claude/plugins/`.
+- The promotion source moves from
+  `.docker-config/home/.claude-worktrees/<slug>/plugins/` to
+  `.home/<slug>/.claude/plugins/`.
+- All prefix sed-rewriting is deleted: every worktree and the template use
+  the same container path (`/home/appuser/.claude/plugins`). Promote is a
+  plain jq merge/replace; `--reseed` is a plain copy into the other
+  `.home/<slug>/.claude/plugins/` dirs.
+- Project-scoped install records are still stripped (they key on the
+  per-worktree `/app-<slug>` path).
+- The pre-split whole-directory-symlink guard is deleted.
 
 ## Migration (one-time)
 
