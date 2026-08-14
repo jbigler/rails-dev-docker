@@ -4,12 +4,12 @@
 # Include repo docs
 !/AGENTS.md
 
-# Include the docker-config directory and its contents (except for the home,
-# db-dumps and status directories)
+# Include the docker-config directory and its contents (except for the
+# home-template, db-dumps and status directories)
 !/.docker-config/
-/.docker-config/home/*
-/.docker-config/home/.*
-!/.docker-config/home/.gitkeep
+/.docker-config/home-template/*
+/.docker-config/home-template/.*
+!/.docker-config/home-template/.gitkeep
 /.docker-config/db-dumps/*
 !/.docker-config/db-dumps/.gitkeep
 /.docker-config/status/*
