@@ -124,6 +124,18 @@ fi
 # mounting the node_modules volume over the bind-mounted worktree.
 mkdir -p "${worktree_dir}/node_modules"
 
+# --- Seed the per-worktree home from the template ---
+home_dir="${root}/.home/${clean_name}"
+home_template="${root}/.docker-config/home-template"
+if [ ! -d "$home_dir" ]; then
+  mkdir -p "$home_dir"
+  if [ -d "$home_template" ]; then
+    cp -a "${home_template}/." "$home_dir/"
+  fi
+  mkdir -p "${home_dir}/.ssh" "${home_dir}/.config"
+  echo "Seeded home: .home/${clean_name}"
+fi
+
 # --- Seed untracked files (secrets/env) from the base worktree ---
 SEED_MANIFEST="${root}/.docker-config/worktree-seed.txt"
 base_dir="${root}/$(find_base_worktree_name)"
