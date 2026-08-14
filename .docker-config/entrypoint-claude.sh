@@ -68,12 +68,16 @@ cp /opt/claude/CLAUDE.md "$CONFIG_DIR/CLAUDE.md"
 # the @RTK.md reference to the fresh CLAUDE.md copy)
 rtk init -g --auto-patch
 
+# ~/.local/bin/claude keeps PATH and /doctor's native-install check happy; a
+# freshly seeded per-worktree home has no .local/bin, so create both every
+# boot (previously this ran only on the non-interactive branch, after exec).
+mkdir -p /home/appuser/.local/bin
+ln -sf /usr/bin/claude /home/appuser/.local/bin/claude
+
 # If first arg starts with '-' or no args given, run claude with skip-permissions
 # Otherwise run the given command directly (e.g., /bin/zsh)
 if [ $# -eq 0 ] || [ "${1#-}" != "$1" ]; then
   exec claude --dangerously-skip-permissions "$@"
 fi
-
-ln -sf /usr/bin/claude /home/appuser/.local/bin/claude
 
 exec "$@"

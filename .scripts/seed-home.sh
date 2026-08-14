@@ -30,6 +30,7 @@ mkdir -p \
   "$home_dir/.config/git" \
   "$home_dir/.npm" \
   "$home_dir/.npm-global" \
+  "$home_dir/.local/bin" \
   "$home_dir/.cache/ms-playwright" \
   "$home_dir/.local/share/nvim" \
   "$home_dir/.claude/plugins/cache" \
