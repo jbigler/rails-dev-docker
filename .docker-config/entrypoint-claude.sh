@@ -76,6 +76,10 @@ cp /opt/claude/CLAUDE.md "$CONFIG_DIR/CLAUDE.md"
 # the @RTK.md reference to the fresh CLAUDE.md copy)
 rtk init -g --auto-patch
 
+# gh extensions live in the per-worktree home, so a fresh home has none.
+# --force installs when missing, upgrades when stale, no-ops when current.
+gh extension install github/gh-stack --force >/dev/null 2>&1 || true
+
 # ~/.local/bin/claude keeps PATH and /doctor's native-install check happy; a
 # freshly seeded per-worktree home has no .local/bin, so create both every
 # boot (previously this ran only on the non-interactive branch, after exec).

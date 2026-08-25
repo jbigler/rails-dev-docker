@@ -10,6 +10,10 @@ npm install -g @agentclientprotocol/claude-agent-acp
 
 export GIT_TERMINAL_PROMPT=0
 
+# gh extensions live in the per-worktree home, so a fresh home has none.
+# --force installs when missing, upgrades when stale, no-ops when current.
+gh extension install github/gh-stack --force >/dev/null 2>&1 || true
+
 # Neovim config is provided read-only by a host bind mount (${NVIM_CONFIG_DIR}).
 # Plugins (lazy.nvim) install into the container's data dir on first launch.
 if [[ ! -f ~/.config/nvim/init.lua ]]; then
