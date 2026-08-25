@@ -115,6 +115,10 @@ point WORKTREE_HOST/S3/UI there instead of host-gateway.
   test:javascript(tj)/test:javascript_watcher(tjw) forward args to npx vitest (Vitest + jsdom, no DB, so no depends=up).  
   All exec into a running rails service, else docker compose run --rm.
 - nvim(v), claude(ai)/claude:newterm(ai:newterm)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:\*.
+- log:trim: truncate (never unlink — a container may hold it open) any */log/\*.log over 100 MB across
+  every worktree. log/test.log is appended by every run and never rotated; a depends of the test:rails\*
+  tasks. Container stdout is capped separately by the x-logging anchor (json-file, 20m x 3) in both
+  compose files — json-file is unbounded by default. Applies on the next up (recreate), not stop/start.
 - claude:template:promote/claude:template:apply: sync the Claude config set (agents, hooks, skills,  
   settings, plugin records) between a worktree home and .docker-config/home-template — promote pushes  
   this worktree's config to the template (merges plugin records unless --replace); apply copies the  

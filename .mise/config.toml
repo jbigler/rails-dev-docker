@@ -74,7 +74,7 @@ alias = "t"
 
 [tasks."test:rails"]
 description = "Run the Rails unit tests. Pass any 'rails test' args (files, file:line, -n, --seed, ...) to run a subset."
-depends = ["up"]
+depends = ["up", "log:trim"]
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails test (e.g. test/models/foo.rb:42, -n /pattern/, --seed 123)"'
 run = """
   if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
@@ -87,7 +87,13 @@ alias = "tr"
 
 [tasks."test:rails_watcher"]
 description = "Start the Retest runner — reruns the matching Rails test on every file save."
-depends = ["up"]
+depends = ["up", "log:trim"]
+# Having `depends` puts mise in prefixed-output mode, which pipes stdio and kills
+# the TTY `-it` needs ("cannot attach stdin to a TTY-enabled container"). `raw`
+# hands the terminal straight to the container.
+raw = true
+# No `docker compose exec` fast path like console/tjw have: quitting the watcher
+# takes the rails container down with it. Always a throwaway `run` container.
 run = """
   CMD='gem list -i retest > /dev/null 2>&1 || gem install retest && retest --rails'
   # `docker compose run` inherits the rails service's traefik labels + proxy network,
@@ -99,7 +105,7 @@ alias = "trw"
 
 [tasks."test:rails_system"]
 description = "Run the Rails system tests. Pass any 'rails test:system' args (files, file:line, -n, --seed, ...) to run a subset."
-depends = ["up"]
+depends = ["up", "log:trim"]
 usage = 'arg "[args]" var=#true help="args forwarded to the test runner (e.g. test/system/foo_test.rb:42, --seed 123)"'
 # `rails test:system` hardcodes the whole test/system dir, so when a specific test
 # file is given, run it through the `rails test` runner (which honors explicit paths).
@@ -287,6 +293,13 @@ run = """
   fi
   exec xdg-open "$url"
 """
+
+[tasks."log:trim"]
+description = "Truncate any worktree log over 100 MB. log/test.log is appended by every test run and never rotated."
+# Truncate, not delete: a container may hold the file open, and unlinking it
+# would leave the writer filling an inode nothing can see. Sweeps every
+# worktree, so a stale one you no longer test still gets reclaimed.
+run = "find {{config_root}}/*/log -maxdepth 1 -name '*.log' -size +100M -exec truncate -s 0 {} + 2>/dev/null || true"
 
 [tasks."wt:share"]
 description = "Expose this worktree (app + S3) over the tailnet for phone testing. One worktree at a time."
