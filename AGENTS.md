@@ -40,6 +40,15 @@ dir is missing (partial filesystem view, e.g. the container).
 
 mise run wt:ls list worktrees; mise run wt:open [browser] open link.
 
+mise run wt:share / wt:unshare → .scripts/share-worktree.sh: expose ONE worktree over the tailnet for
+phone testing. tailscale serve fronts the rails (:443) and rustfs (:8443) containers by docker IP —
+no published ports, Traefik bypassed. A /tmp compose override (injected via COMPOSE_FILE) sets DOMAIN
+to the ts.net name, DEV_HOSTS to WORKTREE_HOST so the desktop .localhost URL keeps working, and
+RUSTFS_ENDPOINT to the tailnet S3 host so presigned URLs resolve off-box. Overrides must be container
+env, not .env.development: compose.yml already sets DOMAIN/RUSTFS_ENDPOINT and dotenv never overwrites
+an existing ENV var. Re-run after `down && up` — container IPs move. `off` calls `tailscale serve
+reset`, which clears every serve on the machine, not just these.
+
 ## Identity / Ports (from local.toml.template, ID = WORKTREE_ID)
 
 - COMPOSE_PROJECT_NAME = filial-<slug> — isolate stacks.

@@ -288,6 +288,14 @@ run = """
   exec xdg-open "$url"
 """
 
+[tasks."wt:share"]
+description = "Expose this worktree (app + S3) over the tailnet for phone testing. One worktree at a time."
+run = '{{config_root}}/.scripts/share-worktree.sh on'
+
+[tasks."wt:unshare"]
+description = "Stop sharing this worktree over the tailnet."
+run = '{{config_root}}/.scripts/share-worktree.sh off'
+
 [tasks."db:dump"]
 description = "Dump the development database and RustFS data for faster container setup."
 run = """
