@@ -342,12 +342,39 @@ run = """
   [ "$args" = "''" ] && args=
   set -- $args
   {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
+  # Forward the host's OAuth token into the container — a bare `-e VAR` inherits
+  # the value from this environment. The token wins over anything stored in the
+  # home, so claude:notoken sets CLAUDE_NO_TOKEN=1 to leave the flag out and let
+  # that home's own login (or the /login prompt, on a home that has none) decide.
+  [ -n "${CLAUDE_NO_TOKEN:-}" ] || export CLAUDE_RUN_OPTS="-e CLAUDE_CODE_OAUTH_TOKEN"
   case "${CLAUDE_NEW_TERM:-}" in
-    ""|0|false|no) exec docker compose run --rm claude "$@" ;;
+    ""|0|false|no) exec docker compose run --rm ${CLAUDE_RUN_OPTS:-} claude "$@" ;;
   esac
   exec ./.scripts/claude-newterm.sh "$@"
 """
 alias = "ai"
+
+[tasks."claude:notoken"]
+description = "Run Claude without CLAUDE_CODE_OAUTH_TOKEN in the container — the session uses this worktree home's own login, and prompts for /login when the home has none. Credentials are left alone, so you can switch back to the token with `mise run claude`."
+usage = 'arg "[args]…" var=#true default=""'
+env = { CLAUDE_NO_TOKEN = "1" }
+run = """
+  args="${usage_args:-}"
+  [ "$args" = "''" ] && args=
+  exec mise run claude $args
+"""
+alias = "ai:notoken"
+
+[tasks."claude:notoken:newterm"]
+description = "claude:notoken in a new tab of the current terminal."
+usage = 'arg "[args]…" var=#true default=""'
+env = { CLAUDE_NO_TOKEN = "1", CLAUDE_NEW_TERM = "1" }
+run = """
+  args="${usage_args:-}"
+  [ "$args" = "''" ] && args=
+  exec mise run claude $args
+"""
+alias = "ai:notoken:newterm"
 
 [tasks."claude:rebuild"]
 description = "Rebuild the Claude container with the latest Claude Code version."

@@ -9,7 +9,9 @@
 set -euo pipefail
 
 WORKDIR="$PWD"
-CMD=(docker compose run --rm claude "$@")
+# CLAUDE_RUN_OPTS carries the `-e CLAUDE_CODE_OAUTH_TOKEN` passthrough set by the
+# claude mise task (empty under claude:notoken). Unquoted: it is a flag list.
+CMD=(docker compose run --rm ${CLAUDE_RUN_OPTS:-} claude "$@")
 
 # Emulators tried, in order, when the detected terminal cannot give us a tab or
 # a window of its own.

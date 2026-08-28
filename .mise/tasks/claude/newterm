@@ -2,5 +2,6 @@
 #MISE description="Run Claude in a new tab of the current terminal (falls back to the current window)."
 #MISE alias="ai:newterm"
 
-# Note: The "run" script path is relative to the project root
-./.scripts/claude-newterm.sh "$@"
+# Via the claude task, not the script directly, so the OAuth-token passthrough
+# (CLAUDE_RUN_OPTS) is decided in one place. CLAUDE_NO_TOKEN=1 drops the token here too.
+CLAUDE_NEW_TERM=1 exec mise run claude "$@"
