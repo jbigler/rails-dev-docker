@@ -64,3 +64,9 @@ worktree by its absolute host path.
 - Worktree creation and removal happen on the HOST via `mise run wt` /
   `mise run wt:rm`. If a worktree needs adding or removing, ask the human to
   do it from the host — do not attempt it yourself.
+- Your working directory is `/app-<slug>` and it is correct. `git worktree list`,
+  `git rev-parse --git-dir`, and `gh stack` report this worktree by its HOST path
+  (`/home/<user>/.../<slug>`) and flag every worktree `prunable`, because those
+  host directories do not exist in here. That mismatch is expected — it does NOT
+  mean your shell is in the wrong place. Do not prefix commands with
+  `cd /app-<slug>`; just run them.
