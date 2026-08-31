@@ -186,6 +186,18 @@ services:
       - ${SSH_AGENT_SOCK:-/dev/null}:/tmp/ssh-agent.sock:ro
       - ../.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro
       - ~/.config/git/ignore:/home/appuser/.config/git/ignore:ro
+      # kitty remote control for vim-kitty-navigator: the plugin shells out to
+      # `kitten @` from the nvim server, which runs in here. The host's kitten
+      # links only libc, so it runs as-is — no kitty in the image. The socket
+      # directory is mounted (not the socket itself, whose name carries the
+      # kitty PID) so a kitty restart needs no container recreate, and rw
+      # because connect(2) wants write on the socket. Requires
+      # `listen_on unix:${HOME}/.local/state/kitty/kitty.sock` in kitty.conf;
+      # the directory must exist before `up`, or docker creates it root-owned
+      # and kitty cannot bind. `mise run nvim` pushes the live socket path and
+      # KITTY_WINDOW_ID into the server on attach.
+      - /usr/bin/kitten:/usr/bin/kitten:ro
+      - ~/.local/state/kitty:/kitty-sock
       - npm_cache:/home/appuser/.npm
       - npm_global:/home/appuser/.npm-global
       - nvim_share:/home/appuser/.local/share/nvim

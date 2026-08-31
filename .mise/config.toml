@@ -47,6 +47,24 @@ quiet = true
 # freshly detected mode in before attaching — mise re-runs the detector on every
 # invocation, so this value is current. Best effort: if the server isn't up yet
 # the --remote-ui below reports it properly.
+# KITTY_LISTEN_ON/KITTY_WINDOW_ID get the same treatment, for
+# vim-kitty-navigator's `kitten @` calls. Both are per-attach values the server
+# cannot inherit: the socket name carries the kitty PID, and the window id
+# differs for every kitty window you attach from. KITTY_WINDOW_ID is not
+# optional — KittyIsInStackLayout() interpolates it into `ls --match id:` and
+# json_decode throws on the empty match, on every navigation keypress.
+# The host path is rewritten to the container's mount point (/kitty-sock). The
+# unix:/* guard skips kitty instances still on an abstract socket (unix:@…),
+# which cannot be mounted — those windows simply get no kitty integration.
+#
+# set-user-vars has to be re-issued here, not left to the plugin: it fires the
+# call once at plugin load, long before this attach supplies the socket, and
+# kitty gates the ctrl+h/j/k/l pass-through on that var (see the
+# `map --when-focus-on var:IS_VIM=true` block in kitty.conf). Without it kitty
+# keeps its own binding and the keys never reach nvim's splits. The matching
+# IS_VIM=false after --remote-ui returns covers detach: the plugin's own
+# VimLeavePre/VimSuspend hooks only fire when the server exits, and the server
+# outlives the UI here.
 # (Comments live out here, not inside `run`: mise echoes the script's first line
 # as the command preview, so a leading comment is all you'd see.)
 run = """
@@ -54,7 +72,18 @@ run = """
     nvim --server localhost:{{ env.NVIM_PORT }} \
       --remote-expr "v:lua.BackgroundSet('$NVIM_BACKGROUND')" >/dev/null 2>&1 || true
   fi
+  kitty_attached=
+  case "${KITTY_LISTEN_ON:-}" in unix:/*)
+    kitty_sock="/kitty-sock/$(basename "${KITTY_LISTEN_ON#unix:}")"
+    nvim --server localhost:{{ env.NVIM_PORT }} \
+      --remote-expr "[setenv('KITTY_LISTEN_ON', 'unix:$kitty_sock'), setenv('KITTY_WINDOW_ID', '${KITTY_WINDOW_ID:-}'), system(['kitten', '@', 'set-user-vars', 'IS_VIM=true'])]" >/dev/null 2>&1 && kitty_attached=1
+    ;;
+  esac
   nvim --remote-ui --server localhost:{{ env.NVIM_PORT }}
+  if [ -n "$kitty_attached" ]; then
+    nvim --server localhost:{{ env.NVIM_PORT }} \
+      --remote-expr "system(['kitten', '@', 'set-user-vars', 'IS_VIM=false'])" >/dev/null 2>&1 || true
+  fi
 """
 alias = "v"
 
