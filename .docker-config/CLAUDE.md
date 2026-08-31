@@ -32,6 +32,41 @@ bash-specific `read`/`declare` flags, `set -o pipefail` availability). Prefer
 POSIX-portable syntax, or invoke `bash -c '...'` explicitly when a snippet
 genuinely needs bash.
 
+# Do not pipe commands into head/tail to trim output
+
+RTK compacts command output for you (see the RTK.md reference), but its
+rewrite rule only fires on a **single** command. Add a pipe and RTK skips the
+command entirely, so the full raw output reaches your context — the opposite
+of what the pipe was for. Measured in this container: 53% of Bash calls got no
+RTK rewrite, and 97% of those were piped or compound.
+
+```
+bundle exec rails test test/a_test.rb                 -> rtk rake test ...   filtered
+bundle exec rails test test/a_test.rb 2>&1 | tail -20 -> no rewrite          raw output
+grep -rn 'x' app                                      -> rtk grep ...        filtered
+grep -rn 'x' app | head -30                           -> no rewrite          raw output
+npm run eslint                                        -> rtk lint            filtered
+npm run eslint 2>&1 | tail -8                         -> no rewrite          raw output
+```
+
+Rules:
+
+- Run the command bare. `rtk rake`, `rtk rubocop`, `rtk lint`, `rtk grep`, and
+  `rtk git` already give you a compact summary of failures or matches.
+- Do not append `| head -N`, `| tail -N`, `2>&1 | grep ...`, or `| wc -l` to a
+  command RTK handles.
+- `&&` and `;` chains are fine — RTK rewrites each part. Only pipes break it.
+- When you genuinely need a pipeline, pipe into `rtk pipe -f <filter>` instead.
+  Filters: `grep`, `rg`, `find`, `fd`, `git-log`, `git-diff`, `git-status`,
+  `log`, `vitest`, `tsc`, `prettier`, plus the Go/Python/PHP ones. There is no
+  `rake`, `rubocop`, or `rspec` pipe filter — for Ruby, drop the pipe and let
+  the `rtk` subcommand do the filtering.
+- `du` is broken: RTK rewrites it to `ncdu`, which prints its help screen
+  instead of a size. Use `rtk proxy "du -sh <path>"` or `stat -c %s <file>`.
+
+Both are upstream bugs, not permanent policy — pipes: rtk-ai/rtk#3722, `du`:
+rtk-ai/rtk#3486. Drop this section once they ship.
+
 # Browser access (chrome-devtools MCP)
 
 A dedicated interactive Chromium runs in the `playwright` container and is
