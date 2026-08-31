@@ -46,10 +46,21 @@
       .worktree h2 {
         display: flex;
         align-items: baseline;
+        gap: 0.5rem;
         margin: 0 0 0.5rem;
         font-size: 0.95rem;
         font-family: ui-monospace, SFMono-Regular, monospace;
         font-weight: 500;
+      }
+      /* Both this and .claude-status claim the free space; whichever renders
+         first wins it, so the pair stays right-aligned with or without a badge. */
+      .rtk {
+        margin-left: auto;
+        font-size: 0.7rem;
+        font-weight: 400;
+        opacity: 0.5;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
       .claude-status {
         margin-left: auto;
@@ -191,6 +202,21 @@
         return `<span class="claude-status ${status.state}"><span class="dot"></span>${label} · ${ago(status.ts)}</span>`;
       }
 
+      function tokens(n) {
+        if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+        if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+        return `${n}`;
+      }
+
+      // RTK token savings, written into the same status file by
+      // claude-status-hook.sh (`rtk gain --format json`, .summary).
+      function rtkChip(status) {
+        const r = status && status.rtk;
+        if (!r || !r.total_commands) return "";
+        const title = `${r.total_commands} rtk commands · ${tokens(r.total_input)} raw → ${tokens(r.total_output)} filtered`;
+        return `<span class="rtk" title="${title}">rtk ${tokens(r.total_saved)} saved · ${Math.round(r.avg_savings_pct)}%</span>`;
+      }
+
       async function load() {
         const status = document.getElementById("status");
         const container = document.getElementById("worktrees");
@@ -251,7 +277,7 @@
                     `<a href="${urls[k]}" class="${i === 0 ? "primary" : ""}">${LABELS[k]}</a>`,
                 )
                 .join("");
-              return `<div class="worktree"><h2>${name}${claudeBadge(claude[name])}</h2><div class="links">${links}</div></div>`;
+              return `<div class="worktree"><h2>${name}${claudeBadge(claude[name])}${rtkChip(claude[name])}</h2><div class="links">${links}</div></div>`;
             })
             .join("");
         }
