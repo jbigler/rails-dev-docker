@@ -34,7 +34,8 @@ mkdir -p \
   "$home_dir/.cache/ms-playwright" \
   "$home_dir/.local/share/nvim" \
   "$home_dir/.claude/plugins/cache" \
-  "$home_dir/.claude/plugins/marketplaces"
+  "$home_dir/.claude/plugins/marketplaces" \
+  "$home_dir/.claude/projects/-app-$name"
 
 # ~/.config/git/ignore is a FILE bind target — if it does not exist when a
 # container starts, the Docker daemon creates it root-owned in the home,

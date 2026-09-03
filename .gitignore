@@ -17,6 +17,9 @@
 /.docker-config/status/*
 !/.docker-config/status/.gitkeep
 
+/.docker-config/claude-memory/*
+!/.docker-config/claude-memory/.gitkeep
+
 # Include the mise files
 !/mise.*
 !/.mise/

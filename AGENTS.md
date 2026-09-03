@@ -15,6 +15,8 @@ dev/test stacks via mise tasks + shared Traefik proxy. Repo history unrelated to
 - .docker-config/ — compose.yml (worktree), proxy/compose.yml (Traefik), Dockerfile, Dockerfile.playwright,  
   entrypoints, .env, initdb/, db-dumps/, init-firewall.sh, home-template/ (seeds .home/<slug>).
 - .home/ — (git-ignored) per-worktree container home dirs, seeded from .docker-config/home-template/.
+- .docker-config/claude-memory/ — (git-ignored) Claude's file memory, shared by every worktree
+  container and by host sessions (which symlink to it); outside .home/ so wt:rm can't delete it.
 - mise.local.toml — (root, git-ignored) set PROJECT_PREFIX, GEM_VOLUME_BASE, secrets.
 - ports.registry — slug:WORKTREE_ID; source for port assignment.
 
@@ -85,7 +87,9 @@ reset`, which clears every serve on the machine, not just these.
   non-localhost Host header), rtk init, then claude --dangerously-skip-permissions.  
   Global memory: committed .docker-config/CLAUDE.md mounted ro → /home/appuser/.claude/CLAUDE.md  
   (browser/MCP + rtk instructions); imports optional CLAUDE.local.md (gitignored  
-  .home/<slug>/.claude/) for user-local instructions.
+  .home/<slug>/.claude/) for user-local instructions.  
+  File memory: ../.docker-config/claude-memory bind-mounted over  
+  ~/.claude/projects/-app-<slug>/memory — the one dir every worktree and host session shares.
 
 Volume shared_gems is external; node_modules is per-worktree. Networks: dev (bridge,  
 MTU 1400) + proxy (external, ${PROJECT_PREFIX}\_proxy).
