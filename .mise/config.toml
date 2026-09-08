@@ -104,6 +104,10 @@ alias = "t"
 [tasks."test:rails"]
 description = "Run the Rails unit tests. Pass any 'rails test' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up", "log:trim"]
+# Two deps put mise in prefixed-output mode, which pipes stdio and prefixes whole
+# lines. Minitest's progress dots carry no newline, so they sit in the buffer until
+# the final summary. `raw` hands the terminal through and they stream as they run.
+raw = true
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails test (e.g. test/models/foo.rb:42, -n /pattern/, --seed 123)"'
 run = """
   if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
@@ -135,6 +139,8 @@ alias = "trw"
 [tasks."test:rails_system"]
 description = "Run the Rails system tests. Pass any 'rails test:system' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up", "log:trim"]
+# Same prefixed-output problem as `test:rails` — see the comment there.
+raw = true
 usage = 'arg "[args]" var=#true help="args forwarded to the test runner (e.g. test/system/foo_test.rb:42, --seed 123)"'
 # `rails test:system` hardcodes the whole test/system dir, so when a specific test
 # file is given, run it through the `rails test` runner (which honors explicit paths).
