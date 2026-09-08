@@ -104,9 +104,10 @@ alias = "t"
 [tasks."test:rails"]
 description = "Run the Rails unit tests. Pass any 'rails test' args (files, file:line, -n, --seed, ...) to run a subset."
 depends = ["up", "log:trim"]
-# Two deps put mise in prefixed-output mode, which pipes stdio and prefixes whole
-# lines. Minitest's progress dots carry no newline, so they sit in the buffer until
-# the final summary. `raw` hands the terminal through and they stream as they run.
+# Sibling deps run in parallel, which puts mise in prefixed-output mode: it pipes
+# stdio and prefixes whole lines (one dep, or a serial chain, keeps the terminal).
+# Minitest's progress dots carry no newline, so they sit in the buffer until the
+# final summary. `raw` hands the terminal through and they stream as they run.
 raw = true
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails test (e.g. test/models/foo.rb:42, -n /pattern/, --seed 123)"'
 run = """
@@ -121,9 +122,9 @@ alias = "tr"
 [tasks."test:rails_watcher"]
 description = "Start the Retest runner — reruns the matching Rails test on every file save."
 depends = ["up", "log:trim"]
-# Having `depends` puts mise in prefixed-output mode, which pipes stdio and kills
-# the TTY `-it` needs ("cannot attach stdin to a TTY-enabled container"). `raw`
-# hands the terminal straight to the container.
+# The parallel sibling deps put mise in prefixed-output mode (see `test:rails`),
+# which pipes stdio and kills the TTY `-it` needs ("cannot attach stdin to a
+# TTY-enabled container"). `raw` hands the terminal straight to the container.
 raw = true
 # No `docker compose exec` fast path like console/tjw have: quitting the watcher
 # takes the rails container down with it. Always a throwaway `run` container.
