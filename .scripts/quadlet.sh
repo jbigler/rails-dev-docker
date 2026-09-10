@@ -37,8 +37,23 @@ render() {
       "$1"
 }
 
+# Writing unit files needs only podman and a user systemd. The socket, the
+# privileged-port sysctl and linger matter when you *start* the services, so
+# they are reported by doctor rather than blocking an install.
+require_hard() {
+  command -v podman >/dev/null || die "podman is not installed"
+  local v major
+  v="$(podman version --format '{{.Client.Version}}')"
+  major="${v%%.*}"
+  (( major >= 5 )) || die "podman $v is too old; needs >= 5 (on 4.x, Quadlet's
+  Notify=healthy silently degrades to --sdnotify=conmon, so health-gated
+  ordering stops working with no error)"
+  systemctl --user list-units >/dev/null 2>&1 \
+    || die "no systemd --user session; Quadlet needs one"
+}
+
 cmd_install() {
-  cmd_doctor || die "prerequisites not met (see above)"
+  require_hard
   mkdir -p "$DEST"
   local src b out
   for src in "$ROOT"/.docker-config/quadlet/*; do
@@ -49,9 +64,12 @@ cmd_install() {
     printf 'installed %s\n' "$(basename "$out")"
   done
   systemctl --user daemon-reload
-  printf '\nStart with: systemctl --user start %s-traefik %s-dozzle %s-home\n' \
-    "$PROJECT_PREFIX" "$PROJECT_PREFIX" "$PROJECT_PREFIX"
-  printf 'Quadlet units cannot be `systemctl --user enable`d -- the [Install]\n'
+  printf '\nInstalled. Now run:\n'
+  printf '  mise run podman:doctor    # confirms the socket and the :80 sysctl\n'
+  printf '  systemctl --user start %s-traefik\n' "$PROJECT_PREFIX"
+  printf '\nThe network and volumes are created by their own generated units and\n'
+  printf 'are pulled in automatically by Requires= -- never create them by hand.\n'
+  printf 'Quadlet units also cannot be `systemctl --user enable`d; the [Install]\n'
   printf 'section in each .container file already handles autostart.\n'
 }
 
@@ -69,6 +87,14 @@ cmd_uninstall() {
 
 cmd_doctor() {
   FAILED=0
+  printf '\n== workspace ==\n'
+  if [[ "$PROJECT_PREFIX" == "default" ]]; then
+    warn "PROJECT_PREFIX is still 'default' -- set it in mise.local.toml at the
+          workspace root, or every podman object is named default_*"
+  else
+    ok "PROJECT_PREFIX=$PROJECT_PREFIX"
+  fi
+
   printf '\n== podman ==\n'
   if command -v podman >/dev/null; then
     local v major
@@ -101,11 +127,11 @@ cmd_doctor() {
     ok "ip_unprivileged_port_start=$start -- rootless can publish :80"
   else
     bad "ip_unprivileged_port_start=$start -- rootless cannot publish :80, so
-        http://<slug>.localhost will not resolve. Either:
-          echo 'net.ipv4.ip_unprivileged_port_start=80' \\
-            | sudo tee /etc/sysctl.d/99-rootless-ports.conf
-          sudo sysctl --system
-        or use a socket-activated system service with User= (no sysctl needed)."
+        http://<slug>.localhost will not resolve. Fix it with:
+            mise run podman:allow-ports
+        That runs two one-liners, both with sudo as the first word and no pipe:
+            sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+            sudo sh -c 'echo net.ipv4.ip_unprivileged_port_start=80 > /etc/sysctl.d/99-rootless-ports.conf'"
   fi
 
   printf '\n== systemd user session ==\n'
@@ -130,14 +156,38 @@ cmd_doctor() {
 # on podman sees nothing on Docker's socket and cannot join a Docker network --
 # so this is a throwaway spike, not a migration step.
 cmd_spike() {
-  local name="${PROJECT_PREFIX}-spike"
-  trap 'podman rm -f "$name" >/dev/null 2>&1 || true' EXIT
-  podman run -d --rm --name "$name" \
+  # Not `local`: the EXIT trap fires after this function's scope is gone, and a
+  # single-quoted trap body would expand $name then -- which under `set -u` dies
+  # with "unbound variable" instead of cleaning up. Value is baked in below.
+  spike_name="${PROJECT_PREFIX}-spike"
+  trap "podman rm -f '$spike_name' >/dev/null 2>&1 || true" EXIT
+
+  # The network is created by its own generated unit, pulled in by Requires= on
+  # the containers. Starting traefik brings up both. Nothing here needs sudo,
+  # and the network must never be created by hand -- a hand-made one would not
+  # carry the subnet, ip-range and MTU from proxy.network.
+  local net_unit="${PROJECT_PREFIX}-proxy-network.service"
+  local traefik_unit="${PROJECT_PREFIX}-traefik.service"
+  if ! systemctl --user cat "$traefik_unit" >/dev/null 2>&1; then
+    die "$traefik_unit does not exist -- run 'mise run podman:install' first"
+  fi
+  printf 'starting %s and %s...\n' "$net_unit" "$traefik_unit"
+  systemctl --user start "$traefik_unit" || die "could not start $traefik_unit.
+  Check: systemctl --user status $traefik_unit
+  A failure to publish :80 means the sysctl is missing -- see podman:doctor."
+
+  if ! podman network exists "${PROJECT_PREFIX}_proxy"; then
+    die "network ${PROJECT_PREFIX}_proxy still missing after starting $net_unit.
+  Check: systemctl --user status $net_unit"
+  fi
+  ok "network ${PROJECT_PREFIX}_proxy exists"
+
+  podman run -d --rm --name "$spike_name" \
     --network "${PROJECT_PREFIX}_proxy" \
     --label traefik.enable=true \
-    --label "traefik.http.routers.${name}.rule=Host(\`spike.localhost\`)" \
-    --label "traefik.http.routers.${name}.entrypoints=web" \
-    --label "traefik.http.services.${name}.loadbalancer.server.port=80" \
+    --label "traefik.http.routers.${spike_name}.rule=Host(\`spike.localhost\`)" \
+    --label "traefik.http.routers.${spike_name}.entrypoints=web" \
+    --label "traefik.http.services.${spike_name}.loadbalancer.server.port=80" \
     docker.io/library/nginx:alpine >/dev/null
   printf 'spike container up; giving Traefik 5s to discover it...\n'
   sleep 5
@@ -145,11 +195,31 @@ cmd_spike() {
   curl -fsS http://wt.localhost/api/http/routers 2>/dev/null \
     | grep -oE "\"name\":\"[^\"]*\"" | sed 's/^/  /' \
     || printf '  could not reach the Traefik API at http://wt.localhost/api\n'
-  printf '\nexpect a router named %s@docker above, and:\n' "$name"
+  printf '\nexpect a router named %s@docker above, and:\n' "$spike_name"
   printf '  curl -H "Host: spike.localhost" http://127.0.0.1/  -> nginx welcome page\n'
   curl -fsS -H 'Host: spike.localhost' http://127.0.0.1/ 2>/dev/null \
     | grep -qi 'welcome to nginx' && ok "routing works end to end" \
     || bad "Traefik did not route to the spike container"
+}
+
+# Lower the privileged-port threshold so rootless podman can publish :80.
+# Both commands put sudo FIRST and use no pipe, so a `sudo` alias whose body
+# contains a `;` cannot split them.
+cmd_allow_ports() {
+  local conf=/etc/sysctl.d/99-rootless-ports.conf
+  printf 'This needs root once. Running:\n'
+  printf '  sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80\n'
+  printf "  sudo sh -c 'echo net.ipv4.ip_unprivileged_port_start=80 > %s'\n\n" "$conf"
+  sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+  sudo sh -c "echo net.ipv4.ip_unprivileged_port_start=80 > $conf"
+  printf '\n'
+  local now
+  now="$(cat /proc/sys/net/ipv4/ip_unprivileged_port_start)"
+  if (( now <= 80 )); then
+    ok "ip_unprivileged_port_start=$now, persisted in $conf"
+  else
+    bad "still $now -- the sysctl did not take"
+  fi
 }
 
 case "${1:-}" in
@@ -157,5 +227,6 @@ case "${1:-}" in
   uninstall) cmd_uninstall ;;
   doctor)    cmd_doctor ;;
   spike)     cmd_spike ;;
-  *) die "usage: $(basename "$0") {install|uninstall|doctor|spike}" ;;
+  allow-ports) cmd_allow_ports ;;
+  *) die "usage: $(basename "$0") {install|uninstall|doctor|spike|allow-ports}" ;;
 esac

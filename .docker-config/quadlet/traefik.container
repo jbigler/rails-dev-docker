@@ -14,10 +14,15 @@ IP=@@TRAEFIK_IP@@
 # dashboard to the whole LAN.
 #
 # Rootless podman cannot publish a port below net.ipv4.ip_unprivileged_port_start
-# (1024 by default), so :80 needs one of:
-#   sudo tee /etc/sysctl.d/99-rootless-ports.conf <<<'net.ipv4.ip_unprivileged_port_start=80'
-#   sudo sysctl --system
-# or a socket-activated system service with User= (see docs/podman-notes.md).
+# (1024 by default), so :80 needs that threshold lowered once:
+#   mise run podman:allow-ports
+# The alternative is socket activation, which Traefik supports since v3.1 by
+# matching a socket's FileDescriptorName to an entryPoint name. It avoids the
+# sysctl but cannot be a Quadlet unit -- podman-systemd.unit(5) states Quadlet
+# does not support User=/Group=, so Traefik would become a hand-maintained
+# system .socket/.service pair while everything else stays a user unit. Not
+# worth it here: the usual payoff is preserving client IPs, and these ports are
+# loopback-only.
 PublishPort=127.0.0.1:80:80
 PublishPort=127.0.0.1:8080:8080
 

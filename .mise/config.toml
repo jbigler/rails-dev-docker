@@ -549,3 +549,7 @@ run = "{{config_root}}/.scripts/quadlet.sh uninstall"
 [tasks."podman:spike"]
 description = "Prove Traefik-on-podman discovers and routes to a podman container. Throwaway; needs podman:install first."
 run = "{{config_root}}/.scripts/quadlet.sh spike"
+
+[tasks."podman:allow-ports"]
+description = "Lower net.ipv4.ip_unprivileged_port_start to 80 so rootless podman can publish Traefik's :80. Needs sudo once."
+run = "{{config_root}}/.scripts/quadlet.sh allow-ports"
