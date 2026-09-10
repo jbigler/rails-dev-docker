@@ -68,7 +68,8 @@ for svc in "${services[@]}"; do
     nvim)   build_target nvim  "$NVIM_IMAGE" ;;
     claude) build_target claude "$CLAUDE_IMAGE" \
               --build-arg CLAUDE_CODE_VERSION=latest \
-              --build-arg GIT_DELTA_VERSION=0.19.2 ;;
+              --build-arg GIT_DELTA_VERSION=0.19.2 \
+              --build-arg "UPDATE_CLAUDE_CODE=${UPDATE_CLAUDE_CODE:-0}" ;;
     playwright)
       printf '\n==> playwright  ->  %s\n' "$PLAYWRIGHT_IMAGE"
       podman build "${PULL[@]}" -t "$PLAYWRIGHT_IMAGE" \

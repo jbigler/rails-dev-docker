@@ -202,16 +202,13 @@ run = """
   args="${usage_args:-}"
   [ "$args" = "''" ] && args=
   set -- $args
-  {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
-  # Forward the host's OAuth token into the container — a bare `-e VAR` inherits
-  # the value from this environment. The token wins over anything stored in the
-  # home, so claude:notoken sets CLAUDE_NO_TOKEN=1 to leave the flag out and let
-  # that home's own login (or the /login prompt, on a home that has none) decide.
-  [ -n "${CLAUDE_NO_TOKEN:-}" ] || export CLAUDE_RUN_OPTS="-e CLAUDE_CODE_OAUTH_TOKEN"
+  # podman-claude.sh seeds the home, starts rails and playwright, and reads
+  # CLAUDE_NO_TOKEN itself -- so unlike the compose version there is no
+  # -e flag list to assemble here.
   case "${CLAUDE_NEW_TERM:-}" in
-    ""|0|false|no) exec docker compose run --rm ${CLAUDE_RUN_OPTS:-} claude "$@" ;;
+    ""|0|false|no) exec {{config_root}}/.scripts/podman-claude.sh "$@" ;;
   esac
-  exec ./.scripts/claude-newterm.sh "$@"
+  exec {{config_root}}/.scripts/claude-newterm.sh "$@"
 """
 alias = "ai"
 
@@ -238,8 +235,10 @@ run = """
 alias = "ai:notoken:newterm"
 
 [tasks."claude:rebuild"]
-description = "Rebuild the Claude container with the latest Claude Code version."
-run = "docker compose build --build-arg UPDATE_CLAUDE_CODE=$(date +%s) claude"
+description = "Rebuild the Claude image with the latest Claude Code version, busting the layer cache so it actually re-fetches."
+# UPDATE_CLAUDE_CODE is an ARG in the Dockerfile whose only purpose is to
+# invalidate the layer that installs Claude Code; the value is never read.
+run = "UPDATE_CLAUDE_CODE=$(date +%s) {{config_root}}/.scripts/podman-build.sh claude"
 
 [tasks."claude:template:promote"]
 description = "Promote this worktree's Claude config set (agents, hooks, skills, settings, plugin records) to the template that seeds new worktrees. Merges plugin records unless --replace; pass a worktree name to promote another worktree."
@@ -271,65 +270,12 @@ run = """
 """
 
 [tasks.clean]
-description = "Remove docker containers, networks, volumes and images belonging to worktrees that no longer exist. Lists what it found and asks before deleting. Leaves live worktrees and the shared base images alone."
-run = "{{config_root}}/.scripts/clean-orphan-docker-artifacts.sh"
+description = "Remove podman containers, networks, volumes and image tags belonging to worktrees that no longer exist. Lists what it found and asks before deleting. Leaves live worktrees and the shared base images alone."
+run = "{{config_root}}/.scripts/clean-orphan-podman-artifacts.sh"
 
 [tasks.destroy]
-description = "Remove all docker resources (containers, networks, volumes, images) for this project and delete the project folder."
-run = """
-  set -e
-  prefix="$PROJECT_PREFIX"
-  [ -z "$prefix" ] && { echo "PROJECT_PREFIX is unset; refusing to destroy" >&2; exit 1; }
-  if [ -f .mise/config.toml ]; then
-    target=$(pwd)
-  elif [ -f ../.mise/config.toml ]; then
-    target=$(cd .. && pwd)
-  else
-    echo "Not at project root or a worktree; refusing to destroy" >&2
-    exit 1
-  fi
-  cd "$HOME"
-  # [-_] catches containers/volumes/networks (filial-*, filial_*);
-  # / catches the shared image repos (filial/rails, filial/claude, ...).
-  pattern="^${prefix}[-_/]"
-
-  echo "This will remove:"
-  echo "  - All docker containers/networks/volumes/images matching ${pattern}"
-  echo "  - The project folder: ${target}"
-  printf "Type 'destroy' to confirm: "
-  read -r confirm
-  [ "$confirm" = "destroy" ] || { echo "Aborted."; exit 1; }
-
-  containers=$(docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' | grep -E "$pattern" || true)
-  if [ -n "$containers" ]; then
-    echo "Removing containers:"; for x in $containers; do echo "  $x"; done
-    echo "$containers" | xargs docker rm -f >/dev/null
-  fi
-
-  networks=$(docker network ls --format '{% raw %}{{.Name}}{% endraw %}' | grep -E "$pattern" || true)
-  if [ -n "$networks" ]; then
-    echo "Removing networks:"; for x in $networks; do echo "  $x"; done
-    echo "$networks" | xargs docker network rm >/dev/null
-  fi
-
-  volumes=$(docker volume ls --format '{% raw %}{{.Name}}{% endraw %}' | grep -E "$pattern" || true)
-  if [ -n "$volumes" ]; then
-    echo "Removing volumes:"; for x in $volumes; do echo "  $x"; done
-    echo "$volumes" | xargs docker volume rm >/dev/null
-  fi
-
-  images=$(docker images --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}' | grep -E "$pattern" || true)
-  if [ -n "$images" ]; then
-    echo "Removing images:"; for x in $images; do echo "  $x"; done
-    echo "$images" | xargs docker rmi -f >/dev/null
-  fi
-
-  echo "Removing project folder: ${target}"
-  rm -rf "$target"
-
-  echo ""
-  echo "Done. Your shell may be in a removed directory; run: cd ~"
-"""
+description = "Remove all podman resources (containers, networks, volumes, images) for this project, the rendered systemd units, and the project folder."
+run = "{{config_root}}/.scripts/podman-destroy.sh"
 
 [tasks.doctor]
 description = "Check the rootless podman prerequisites: version, socket, privileged-port sysctl, linger."

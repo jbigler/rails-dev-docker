@@ -9,9 +9,11 @@
 set -euo pipefail
 
 WORKDIR="$PWD"
-# CLAUDE_RUN_OPTS carries the `-e CLAUDE_CODE_OAUTH_TOKEN` passthrough set by the
-# claude mise task (empty under claude:notoken). Unquoted: it is a flag list.
-CMD=(docker compose run --rm ${CLAUDE_RUN_OPTS:-} claude "$@")
+# podman-claude.sh reads CLAUDE_NO_TOKEN from the environment itself, so there
+# is no flag list to forward -- the exported variable crosses into the new
+# terminal with the rest of the mise env. That replaces the CLAUDE_RUN_OPTS
+# passthrough the compose version needed.
+CMD=("$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/podman-claude.sh" "$@")
 
 # Emulators tried, in order, when the detected terminal cannot give us a tab or
 # a window of its own.
