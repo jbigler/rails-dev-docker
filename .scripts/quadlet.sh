@@ -106,9 +106,65 @@ lint_templates() {
   fi
 }
 
+# The second failure of the same shape, and the one that broke the first `up`:
+# Quadlet translates a [Container] EnvironmentFile= into `podman run
+# --env-file`, so the values land inside the container and the systemd service
+# environment stays empty. But every ${VAR} in a Quadlet key is expanded by
+# *systemd*, from the service environment, when it builds ExecStart. So a
+# template that references ${VAR} in its keys and loads the file only under
+# [Container] gets empty strings everywhere, and podman then does something
+# quietly wrong rather than failing: `--publish 127.0.0.1::5432` binds a random
+# host port, `--label ...Host(``)` registers an unroutable rule. Only `--cpus=`
+# happened to be strict enough to error out and expose it.
+#
+# The fix is to load the same file under [Service] as well, and the two are not
+# redundant: [Service] resolves the unit's own keys, [Container] gives the
+# container process its environment.
+#
+# Also catches an unescaped ${1}: that is a Traefik regex backreference, and
+# systemd would expand it to nothing. It has to be written $${1}.
+lint_env_expansion() {
+  local f out all=""
+  for f in "$ROOT"/.docker-config/quadlet/*.container; do
+    [[ -e "$f" ]] || continue
+    out="$(awk '
+      /^\[/ { section = $0; next }
+      {
+        line = $0
+        sub(/[[:space:]]*#.*/, "", line)      # strip trailing comments
+        gsub(/\$\$/, "", line)                 # $$ is an escaped literal $
+        if (section == "[Service]") {
+          if (line ~ /^EnvironmentFile=/) svc_envfile = 1
+          next
+        }
+        if (line ~ /\$\{[A-Za-z_][A-Za-z0-9_]*\}/) {
+          refs++
+          if (first_ref == "") first_ref = NR ": " $0
+        }
+        if (line ~ /\$\{[0-9]+\}/) backref = NR ": " $0
+      }
+      END {
+        if (refs && !svc_envfile)
+          print "    references ${VAR} in a key but has no EnvironmentFile= under [Service]\n    " first_ref
+        if (backref != "")
+          print "    unescaped ${N} -- systemd expands it away; write $${N}\n    " backref
+      }
+    ' "$f")"
+    [[ -n "$out" ]] || continue
+    printf '  %s\n%s\n' "$(basename "$f")" "$out" >&2
+    all="x$all"
+  done
+  [[ -n "$all" ]] || return 0
+  printf '\nerror: the templates above would expand ${VAR} to an empty string.\n' >&2
+  printf 'Add to the [Service] section of each:\n' >&2
+  printf '  EnvironmentFile=@@ROOT@@/%%i/.units.env\n' >&2
+  return 1
+}
+
 cmd_install() {
   require_hard
   lint_templates || die "refusing to install templates that would silently lose data"
+  lint_env_expansion || die "refusing to install templates whose keys cannot expand"
   mkdir -p "$DEST"
   local src b out
   for src in "$ROOT"/.docker-config/quadlet/*; do

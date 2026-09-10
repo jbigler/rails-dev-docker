@@ -76,6 +76,13 @@ Entrypoint=entrypoint-app.sh
 Exec=bin/dev
 
 [Service]
+# Quadlet turns a [Container] EnvironmentFile= into `podman run --env-file`, which
+# puts the values *inside* the container and leaves the systemd service
+# environment empty -- so every ${VAR} above expanded to nothing. The keys are
+# expanded by systemd from the service environment, so the same file has to be
+# loaded here too. Both lines are needed and neither is redundant: this one
+# resolves the unit's own keys, the [Container] one gives the process its env.
+EnvironmentFile=@@ROOT@@/%i/.units.env
 Restart=on-failure
 RestartSec=5
 # The entrypoint waits on postgres and redis before booting Puma; systemd's 90s
