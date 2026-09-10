@@ -6,6 +6,11 @@ input="${1:?Usage: mise run init <user/repo | git-url>}"
 source "$(dirname "$0")/lib.sh"
 root=$(find_project_root)
 
+# A manual clone of the wrapper has no root mise.local.toml, which leaves
+# PROJECT_PREFIX as the literal "default". bootstrap.sh writes it before
+# calling us, so this is a no-op on that path.
+"$(dirname "$0")/local-config.sh"
+
 # --- Resolve clone URL ---
 
 if [[ "$input" =~ ^https?:// || "$input" =~ ^git@ ]]; then

@@ -28,5 +28,4 @@ Label=traefik.http.routers.wt-api.service=api@internal
 [Service]
 Restart=unless-stopped
 
-[Install]
-WantedBy=default.target
+# No [Install]: pulled in by Requires= on traefik when the proxy starts.

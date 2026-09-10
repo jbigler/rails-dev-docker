@@ -58,5 +58,6 @@ Exec=--providers.docker=true \
 [Service]
 Restart=unless-stopped
 
-[Install]
-WantedBy=default.target
+# Started on demand: `mise run podman:proxy`, or pulled in by a
+# worktree unit's Wants=. No [Install] section, so nothing runs at login --
+# which is the point of leaving linger off.

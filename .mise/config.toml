@@ -553,3 +553,16 @@ run = "{{config_root}}/.scripts/quadlet.sh spike"
 [tasks."podman:allow-ports"]
 description = "Lower net.ipv4.ip_unprivileged_port_start to 80 so rootless podman can publish Traefik's :80. Needs sudo once."
 run = "{{config_root}}/.scripts/quadlet.sh allow-ports"
+
+[tasks."config:init"]
+description = "Create the workspace-root mise.local.toml if missing (prompts for the project name, defaulting to the folder name)."
+run = "{{config_root}}/.scripts/local-config.sh"
+
+[tasks."podman:proxy"]
+description = "Start the podman proxy stack (traefik, dozzle, dashboard) on demand. Worktree units pull it in automatically once they exist."
+run = '''
+for u in traefik dozzle home; do
+  systemctl --user start "${PROJECT_PREFIX}-$u.service"
+done
+systemctl --user --no-pager --no-legend list-units "${PROJECT_PREFIX}-*"
+'''

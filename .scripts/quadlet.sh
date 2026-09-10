@@ -114,8 +114,9 @@ cmd_doctor() {
   FAILED=0
   printf '\n== workspace ==\n'
   if [[ "$PROJECT_PREFIX" == "default" ]]; then
-    warn "PROJECT_PREFIX is still 'default' -- set it in mise.local.toml at the
-          workspace root, or every podman object is named default_*"
+    warn "PROJECT_PREFIX is still 'default', so every podman object would be
+          named default_*. Create the workspace config:
+              mise run config:init"
   else
     ok "PROJECT_PREFIX=$PROJECT_PREFIX"
   fi
