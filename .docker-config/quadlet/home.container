@@ -21,7 +21,15 @@ Label=traefik.http.routers.wt-home.service=wt-home
 Label=traefik.http.services.wt-home.loadbalancer.server.port=80
 # Same host, /api path -> Traefik's internal API (same-origin for fetch).
 # No explicit priority; longer rules win automatically.
-Label=traefik.http.routers.wt-api.rule=Host(`wt.localhost`) && PathPrefix(`/api`)
+# Quoted because the value contains spaces. Quadlet writes Label= values into
+# ExecStart verbatim, and systemd then splits on whitespace -- so unquoted, this
+# became `--label ...rule=Host(`wt.localhost`)` plus two junk labels `&&` and
+# `PathPrefix(`/api`)`. The rule silently lost its path condition, leaving
+# wt-api and wt-home with the same rule and the same priority 20, so Traefik
+# picked between them arbitrarily: sometimes the dashboard for `/`, sometimes
+# nginx for `/api`. Quoting escapes the spaces as \x20, the way HealthCmd
+# already does.
+Label="traefik.http.routers.wt-api.rule=Host(`wt.localhost`) && PathPrefix(`/api`)"
 Label=traefik.http.routers.wt-api.entrypoints=web
 Label=traefik.http.routers.wt-api.service=api@internal
 

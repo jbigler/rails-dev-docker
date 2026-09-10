@@ -77,8 +77,32 @@ require_hard() {
     || die "no systemd --user session; Quadlet needs one"
 }
 
+# Quadlet writes Label= and Environment= values into ExecStart verbatim, and
+# systemd then splits on whitespace. An unquoted value containing a space is
+# therefore truncated at the space, with the remainder becoming separate
+# arguments -- which for a Traefik rule label means silently losing half the
+# rule and gaining junk labels. Quoting escapes the spaces (\x20) the way
+# HealthCmd already does. This is invisible to the generator, which reports no
+# error, so lint the source templates instead.
+lint_templates() {
+  local bad=0 f line
+  while IFS=: read -r f n line; do
+    [[ -n "$line" ]] || continue
+    printf '  %s:%s\n    %s\n' "$(basename "$f")" "$n" "$line" >&2
+    bad=1
+  done < <(grep -nHE '^(Label|Environment)=[^"]*[[:space:]]' "$ROOT"/.docker-config/quadlet/* 2>/dev/null \
+             | sed 's/^\([^:]*\):\([0-9]*\):/\1:\2:/')
+  if (( bad )); then
+    printf '\nerror: the values above contain spaces but are not quoted.\n' >&2
+    printf 'Wrap the whole value in double quotes, e.g.\n' >&2
+    printf '  Label="traefik.http.routers.x.rule=Host(`a`) && PathPrefix(`/b`)"\n' >&2
+    return 1
+  fi
+}
+
 cmd_install() {
   require_hard
+  lint_templates || die "refusing to install templates that would silently lose data"
   mkdir -p "$DEST"
   local src b out
   for src in "$ROOT"/.docker-config/quadlet/*; do
@@ -203,6 +227,22 @@ cmd_doctor() {
               mise run config:init"
   else
     ok "PROJECT_PREFIX=$PROJECT_PREFIX"
+  fi
+
+  # More than one installed prefix means an earlier install used a different
+  # PROJECT_PREFIX -- most often units installed as default-* before
+  # mise.local.toml existed. The stale set never runs (no [Install]), but its
+  # units are startable, and starting one contends for 127.0.0.1:80 with the
+  # real proxy.
+  local prefixes count
+  prefixes="$(installed_prefixes | paste -sd' ' -)"
+  count="$(installed_prefixes | wc -l)"
+  if (( count > 1 )); then
+    warn "units are installed for more than one prefix: $prefixes
+          Only '$PROJECT_PREFIX' is current. Remove the others -- they are
+          startable and would fight for 127.0.0.1:80:
+              rm ~/.config/containers/systemd/{$(installed_prefixes | grep -v "^${PROJECT_PREFIX}$" | paste -sd, -)}-*
+              systemctl --user daemon-reload"
   fi
 
   printf '\n== podman ==\n'
