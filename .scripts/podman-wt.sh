@@ -79,19 +79,44 @@ diagnose_failure() {
     esac
   done
   printf '\n' >&2
-  # Include activating: a unit stuck there is usually the cause (a healthcheck
-  # that never passes, or podman trying to pull an image that was never built),
-  # and its journal says which.
-  for u in "${PROJECT_PREFIX}-proxy-network.service" \
-           "$(unit net-network)" "$(unit db)" "$(unit redis)" \
-           "$(unit rustfs-init)" "$(unit rustfs)" "$(unit playwright)"; do
+  # rails first, and always: it is the unit `up` asked for, so when every
+  # dependency reports ok it is the only thing left -- and an earlier version
+  # skipped it on the theory that systemd's own "see journalctl -xeu" covered
+  # it, which left the one interesting journal unprinted.
+  #
+  # Include activating as well as failed: a unit stuck there is usually the
+  # cause (a healthcheck that never passes, an image that was never built, or
+  # Restart=on-failure cycling a container that dies on boot).
+  #
+  # Both halves are needed. Every unit sets LogDriver=k8s-file, so the
+  # container's own stdout does NOT go to the journal: the journal carries
+  # systemd's and podman's messages ("Error: ..." from `podman run`), while the
+  # entrypoint's output -- the wait-for-postgres loop, a Puma backtrace -- is
+  # only in `podman logs`. Printing one without the other hides half the
+  # failures.
+  local ct
+  for svc in rails playwright rustfs rustfs-init redis db net-network; do
+    u="$(unit "$svc")"
     state="$(systemctl --user show -p ActiveState --value "$u" 2>/dev/null)"
-    [[ "$state" == "failed" || "$state" == "activating" ]] || continue
-    printf '=== journal: %s ===\n' "$u" >&2
-    journalctl --user -u "$u" -n 15 --no-pager 2>/dev/null \
+    [[ "$svc" == rails || "$state" == "failed" || "$state" == "activating" ]] || continue
+    printf '=== journal: %s (%s) ===\n' "$u" "${state:-no such unit}" >&2
+    journalctl --user -u "$u" -n 20 --no-pager 2>/dev/null \
       | grep -vE '^-- (Boot|No entries)' | sed 's/^/  /' >&2
+    ct="$P-$W-$svc"
+    if [[ "$svc" != net-network ]] && podman container exists "$ct" 2>/dev/null; then
+      printf '  --- podman logs %s (container stdout; k8s-file, not journald) ---\n' "$ct" >&2
+      podman logs --tail 25 "$ct" 2>&1 | sed 's/^/  /' >&2
+    fi
     printf '\n' >&2
   done
+  # The proxy network is not a container and has no logs, so it stays separate.
+  state="$(systemctl --user show -p ActiveState --value "${PROJECT_PREFIX}-proxy-network.service" 2>/dev/null)"
+  if [[ "$state" == "failed" || "$state" == "activating" ]]; then
+    printf '=== journal: %s-proxy-network.service (%s) ===\n' "$PROJECT_PREFIX" "$state" >&2
+    journalctl --user -u "${PROJECT_PREFIX}-proxy-network.service" -n 15 --no-pager 2>/dev/null \
+      | grep -vE '^-- (Boot|No entries)' | sed 's/^/  /' >&2
+    printf '\n' >&2
+  fi
   # Missing images are the most common cause and produce no obvious error --
   # podman tries to pull localhost/... which cannot succeed, so the unit sits
   # in activating until it times out.
