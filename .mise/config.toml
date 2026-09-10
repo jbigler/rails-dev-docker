@@ -526,3 +526,26 @@ run = """
 description = "Stop the current worktree's containers without removing them or their volumes (unlike 'down'). Resume with 'mise run up'. Leaves the shared proxy running. Run from a worktree."
 run = "docker compose stop"
 alias = "s"
+
+# --- podman conversion (in progress) ---------------------------------------
+# These sit alongside the docker-based tasks above rather than replacing them.
+# The cutover is all-or-nothing per PROJECT_PREFIX: Traefik on podman cannot see
+# containers on Docker's socket and cannot join a Docker network, so the proxy
+# and the worktree stacks have to move together. Until then, use podman:spike to
+# validate discovery without touching the working Docker setup.
+
+[tasks."podman:doctor"]
+description = "Check the rootless podman prerequisites: version, socket, privileged-port sysctl, linger."
+run = "{{config_root}}/.scripts/quadlet.sh doctor"
+
+[tasks."podman:install"]
+description = "Render .docker-config/quadlet/ into ~/.config/containers/systemd and reload systemd."
+run = "{{config_root}}/.scripts/quadlet.sh install"
+
+[tasks."podman:uninstall"]
+description = "Remove the rendered Quadlet units and reload systemd."
+run = "{{config_root}}/.scripts/quadlet.sh uninstall"
+
+[tasks."podman:spike"]
+description = "Prove Traefik-on-podman discovers and routes to a podman container. Throwaway; needs podman:install first."
+run = "{{config_root}}/.scripts/quadlet.sh spike"

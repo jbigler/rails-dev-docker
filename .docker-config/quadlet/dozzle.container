@@ -1,0 +1,25 @@
+[Unit]
+Description=Dozzle live container logs for @@P@@
+Requires=@@P@@-traefik.service
+After=@@P@@-traefik.service
+
+[Container]
+Image=docker.io/amir20/dozzle:latest
+ContainerName=@@P@@-dozzle
+Network=@@P@@-proxy.network
+Volume=%t/podman/podman.sock:/var/run/docker.sock:ro
+# Only this workspace's containers; keeps unrelated podman noise out of the
+# log view. Podman container names keep the prefix, so this still matches.
+Environment=DOZZLE_FILTER=name=@@P@@
+LogDriver=k8s-file
+LogOpt=max-size=20m
+Label=traefik.enable=true
+Label=traefik.http.routers.wt-logs.rule=Host(`logs.localhost`)
+Label=traefik.http.routers.wt-logs.entrypoints=web
+Label=traefik.http.services.wt-logs.loadbalancer.server.port=8080
+
+[Service]
+Restart=unless-stopped
+
+[Install]
+WantedBy=default.target

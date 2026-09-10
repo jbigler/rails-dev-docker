@@ -1,0 +1,13 @@
+[Unit]
+Description=Shared proxy network for @@P@@ worktrees
+
+[Network]
+NetworkName=@@P@@_proxy
+# Fixed subnet so TRAEFIK_IP is predictable, and dynamic addresses come only
+# from the upper half so Traefik's low static address can never be claimed
+# first. Same reasoning as the compose ipam block this replaces.
+Subnet=@@PROXY_SUBNET@@
+Gateway=@@PROXY_GATEWAY@@
+IPRange=@@PROXY_IP_RANGE@@
+# Fix for access when a WireGuard VPN is up on the host.
+Options=mtu=1400

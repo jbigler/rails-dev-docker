@@ -1,0 +1,57 @@
+[Unit]
+Description=Traefik reverse proxy for @@P@@ worktrees
+
+[Container]
+Image=docker.io/traefik:v3.7
+ContainerName=@@P@@-traefik
+Network=@@P@@-proxy.network
+# Static address so worktree containers can reach Traefik-routed hosts without
+# going through the host, whose ports are loopback-bound.
+IP=@@TRAEFIK_IP@@
+
+# Loopback only. With Host-header routing a 0.0.0.0 bind would expose every
+# worktree app, the password-less noVNC pages, the RustFS UI and the insecure
+# dashboard to the whole LAN.
+#
+# Rootless podman cannot publish a port below net.ipv4.ip_unprivileged_port_start
+# (1024 by default), so :80 needs one of:
+#   sudo tee /etc/sysctl.d/99-rootless-ports.conf <<<'net.ipv4.ip_unprivileged_port_start=80'
+#   sudo sysctl --system
+# or a socket-activated system service with User= (see docs/podman-notes.md).
+PublishPort=127.0.0.1:80:80
+PublishPort=127.0.0.1:8080:8080
+
+# Traefik's docker provider against the rootless podman socket, mounted at the
+# path Traefik already looks for, so no provider config changes. The socket is
+# owned by your user and container root maps to your user under the default
+# rootless mapping -- so deliberately NO UserNS=keep-id here.
+#
+# Requires: systemctl --user enable --now podman.socket
+Volume=%t/podman/podman.sock:/var/run/docker.sock:ro
+
+# Keep k8s-file (podman's default) rather than journald: Dozzle reads logs
+# through the compat API's /containers/<id>/logs endpoint, which serves
+# k8s-file content and returns nothing for journald.
+LogDriver=k8s-file
+LogOpt=max-size=20m
+
+Exec=--providers.docker=true \
+  --providers.docker.exposedByDefault=false \
+  --providers.docker.network=@@P@@_proxy \
+  --entryPoints.web.address=:80 \
+  --entryPoints.web.http.encodedcharacters.allowencodedslash=true \
+  --entryPoints.web.http.encodedcharacters.allowencodedbackslash=true \
+  --entryPoints.web.http.encodedcharacters.allowencodednullcharacter=true \
+  --entryPoints.web.http.encodedcharacters.allowencodedsemicolon=true \
+  --entryPoints.web.http.encodedcharacters.allowencodedpercent=true \
+  --entryPoints.web.http.encodedcharacters.allowencodedquestionmark=true \
+  --entryPoints.web.http.encodedcharacters.allowencodedhash=true \
+  --api.insecure=true \
+  --log.level=INFO \
+  --accesslog=false
+
+[Service]
+Restart=unless-stopped
+
+[Install]
+WantedBy=default.target
