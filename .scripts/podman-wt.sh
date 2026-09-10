@@ -127,6 +127,22 @@ cmd_stop() {
   printf 'stopped every %s unit for worktree %s\n' "$P" "$W"
 }
 
+# mise's own `confirm` renders a nicer prompt, but it preselects Yes and takes a
+# bare Enter as acceptance -- the wrong default for the one verb that deletes a
+# database. So the prompt lives here. gum, if installed, gives the same widget
+# with an explicit --default=no; otherwise fall back to a plain read, which is
+# always available. Either way Enter means keep the data.
+confirm_destructive() {
+  local prompt="$1"
+  if command -v gum >/dev/null 2>&1; then
+    gum confirm --default=no --affirmative="Delete" --negative="Keep" "$prompt"
+    return
+  fi
+  local reply=""
+  read -r -p "$prompt [y/N] " reply
+  case "$reply" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
 cmd_down() {
   # Destructive, mirroring the docker `down` task, which removed volumes. The
   # confirmation lives here rather than only in the mise task because these
@@ -154,12 +170,8 @@ cmd_down() {
   if [[ "${FORCE:-}" == "1" ]]; then
     printf 'FORCE=1 set; proceeding without asking.\n'
   elif [[ -t 0 ]]; then
-    local reply=""
-    read -r -p "Delete these volumes? [y/N] " reply
-    case "$reply" in
-      y|Y|yes|YES) ;;
-      *) printf 'Aborted; nothing was removed. Containers left running.\n'; return ;;
-    esac
+    confirm_destructive "Delete these volumes?" || {
+      printf 'Aborted; nothing was removed. Containers left running.\n'; return; }
   else
     die "refusing to delete volumes without a terminal to confirm at.
   Re-run interactively, or set FORCE=1 if you are sure."
