@@ -558,14 +558,25 @@ run = "{{config_root}}/.scripts/quadlet.sh allow-ports"
 description = "Create the workspace-root mise.local.toml if missing (prompts for the project name, defaulting to the folder name)."
 run = "{{config_root}}/.scripts/local-config.sh"
 
-[tasks."podman:proxy"]
-description = "Start the podman proxy stack (traefik, dozzle, dashboard) on demand. Worktree units pull it in automatically once they exist."
-run = '''
-for u in traefik dozzle home; do
-  systemctl --user start "${PROJECT_PREFIX}-$u.service"
-done
-systemctl --user --no-pager --no-legend list-units "${PROJECT_PREFIX}-*"
-'''
+[tasks."podman:proxy:up"]
+description = "Start the podman proxy stack (traefik, dozzle, dashboard). Worktree units pull it in automatically, so this is for using the dashboard without a worktree running."
+run = "{{config_root}}/.scripts/quadlet.sh proxy-up"
+
+[tasks."podman:proxy:down"]
+description = "Stop the podman proxy stack and its network."
+run = "{{config_root}}/.scripts/quadlet.sh proxy-down"
+
+[tasks."podman:proxy:restart"]
+description = "Restart the podman proxy stack, recreating its containers."
+run = "{{config_root}}/.scripts/quadlet.sh proxy-restart"
+
+[tasks."podman:proxy:logs"]
+description = "Follow a proxy service's journal (default traefik; e.g. `mise run podman:proxy:logs dozzle`)."
+run = "{{config_root}}/.scripts/quadlet.sh proxy-logs"
+
+[tasks."podman:proxy:pull"]
+description = "Pull updated traefik, dozzle and nginx images and recreate the proxy stack with them."
+run = "{{config_root}}/.scripts/quadlet.sh proxy-pull"
 
 [tasks."podman:verify"]
 description = "Check that Traefik actually discovered the proxy containers over the podman socket, and that routing works end to end."

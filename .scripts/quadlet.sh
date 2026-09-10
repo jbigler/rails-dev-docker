@@ -98,6 +98,77 @@ cmd_install() {
   printf 'section in each .container file already handles autostart.\n'
 }
 
+# The failure this most often hits: units installed under one PROJECT_PREFIX
+# while a task runs with another. systemd's own message -- "Unit
+# master-traefik.service not found" -- names neither the prefix in play nor the
+# prefixes that do have units, so it reads as a missing install rather than a
+# mismatch.
+installed_prefixes() {
+  local f b
+  shopt -s nullglob
+  for f in "$DEST"/*-traefik.container; do
+    b="$(basename "$f")"
+    printf '%s\n' "${b%-traefik.container}"
+  done
+}
+
+require_prefix() {
+  [[ -f "$DEST/${PROJECT_PREFIX}-traefik.container" ]] && return 0
+  local have
+  have="$(installed_prefixes | paste -sd' ' -)"
+  if [[ -n "$have" ]]; then
+    die "no units installed for PROJECT_PREFIX='$PROJECT_PREFIX', but units exist for: $have
+  PROJECT_PREFIX comes from mise.local.toml at the workspace root. If that is
+  the wrong value, fix it there rather than reinstalling -- reinstalling would
+  add a second set of units and orphan the containers you already have.
+  Otherwise: mise run podman:install"
+  fi
+  die "no units installed at all. Run: mise run podman:install"
+}
+
+PROXY_UNITS=(traefik dozzle home)
+
+cmd_proxy_up() {
+  require_prefix
+  local u
+  for u in "${PROXY_UNITS[@]}"; do
+    systemctl --user start "${PROJECT_PREFIX}-$u.service"
+  done
+  cmd_status
+}
+
+cmd_proxy_down() {
+  local u
+  # Reverse order: dozzle and home Require= traefik.
+  for u in home dozzle traefik; do
+    systemctl --user stop "${PROJECT_PREFIX}-$u.service" 2>/dev/null || true
+  done
+  systemctl --user stop "${PROJECT_PREFIX}-proxy-network.service" 2>/dev/null || true
+  printf 'proxy stopped\n'
+}
+
+cmd_proxy_restart() {
+  require_prefix
+  local u
+  for u in "${PROXY_UNITS[@]}"; do
+    systemctl --user restart "${PROJECT_PREFIX}-$u.service"
+  done
+  cmd_status
+}
+
+cmd_proxy_logs() {
+  local svc="${1:-traefik}"
+  exec journalctl --user -f -u "${PROJECT_PREFIX}-${svc}.service"
+}
+
+# The three proxy images are registry images, so this is a plain pull plus a
+# recreate -- no --ignore-buildable equivalent needed.
+cmd_proxy_pull() {
+  require_prefix
+  podman pull docker.io/traefik:v3.7 docker.io/amir20/dozzle:latest docker.io/library/nginx:alpine
+  cmd_proxy_restart
+}
+
 cmd_uninstall() {
   local f removed=0
   shopt -s nullglob
@@ -326,7 +397,7 @@ cmd_verify() {
   if curl -fsS --max-time 5 "$api/overview" >/dev/null 2>&1; then
     ok "reachable at $api"
   elif (( FAILED )); then
-    bad "unreachable at $api -- start the proxy first: mise run podman:proxy"
+    bad "unreachable at $api -- start the proxy first: mise run podman:proxy:up"
     printf '\n'; return 1
   else
     bad "unreachable at $api even though traefik is running. Its API is not
@@ -396,5 +467,10 @@ case "${1:-}" in
   spike)     cmd_spike ;;
   verify)    cmd_verify ;;
   allow-ports) cmd_allow_ports ;;
-  *) die "usage: $(basename "$0") {install|uninstall|doctor|verify|spike|allow-ports}" ;;
+  proxy-up)      cmd_proxy_up ;;
+  proxy-down)    cmd_proxy_down ;;
+  proxy-restart) cmd_proxy_restart ;;
+  proxy-logs)    shift; cmd_proxy_logs "$@" ;;
+  proxy-pull)    cmd_proxy_pull ;;
+  *) die "usage: $(basename "$0") {install|uninstall|doctor|verify|spike|allow-ports|proxy-up|proxy-down|proxy-restart|proxy-logs|proxy-pull}" ;;
 esac
