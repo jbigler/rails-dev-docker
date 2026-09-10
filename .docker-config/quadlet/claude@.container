@@ -6,6 +6,15 @@ Description=Claude Code for worktree %i
 Requires=@@P@@-net-network@%i.service
 After=@@P@@-net-network@%i.service
 
+# The test path is claude -> playwright -> rails: Claude connects to the
+# browser server, and the browser navigates to the rails dev server by its
+# `rails` network alias (which is what DEV_HOSTS allows). So starting claude
+# alone has to bring both up, or its system tests fail with nothing to drive
+# and nothing to visit. Wants= rather than Requires= so neither failing takes
+# the Claude session itself down.
+Wants=@@P@@-rails@%i.service @@P@@-playwright@%i.service
+After=@@P@@-rails@%i.service @@P@@-playwright@%i.service
+
 [Container]
 Image=${CLAUDE_IMAGE}
 ContainerName=@@P@@-%i-claude

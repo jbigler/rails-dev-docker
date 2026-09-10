@@ -14,7 +14,7 @@ After=@@P@@-traefik.service
 Image=${PLAYWRIGHT_IMAGE}
 ContainerName=@@P@@-%i-playwright
 Network=@@P@@-%i-dev
-NetworkAlias=selenium
+NetworkAlias=playwright
 Network=@@P@@-proxy.network
 
 EnvironmentFile=@@ROOT@@/%i/.units.env
