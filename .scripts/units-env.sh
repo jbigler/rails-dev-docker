@@ -13,11 +13,21 @@
 set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+ROOT="$(find_project_root)"
 
 : "${PROJECT_PREFIX:?run from a worktree directory (mise env not loaded)}"
 : "${CURRENT_WORKTREE_NAME:?CURRENT_WORKTREE_NAME unset (mise env not loaded)}"
 
-OUT="$PWD/.units.env"
+# Derived from the project root and the worktree name, never from $PWD: mise
+# runs tasks with the working directory set to config_root -- the wrapper root
+# -- no matter which worktree you invoke them from. Using $PWD wrote this file
+# to the wrapper root while the units read <root>/<worktree>/.units.env, so
+# every unit failed with "no such file or directory" on a file that appeared to
+# exist. mise still resolves the *env* from the invocation directory, which is
+# why CURRENT_WORKTREE_NAME is correct here even though $PWD is not.
+WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
+[[ -d "$WT_DIR" ]] || { printf 'error: no worktree directory at %s\n' "$WT_DIR" >&2; exit 1; }
+OUT="$WT_DIR/.units.env"
 
 # An unset variable expands to an empty string in ExecStart, and podman then
 # does something quietly wrong rather than failing -- `--publish 127.0.0.1::5432`

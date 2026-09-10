@@ -17,13 +17,19 @@ CTX="$ROOT/.docker-config"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# Not $PWD: mise runs tasks from config_root regardless of the directory you
+# invoke them from, so the worktree has to be derived from its name.
+: "${CURRENT_WORKTREE_NAME:?run from a worktree directory (mise env not loaded)}"
+WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
+[[ -d "$WT_DIR" ]] || die "no worktree directory at $WT_DIR"
+
 # Generate it rather than complaining: build-before-up would otherwise be an
 # ordering trap, and podman-wt.sh already self-heals the same way.
-if [[ ! -f ./.units.env ]]; then
-  printf 'no .units.env in this worktree; generating it...\n'
+if [[ ! -f "$WT_DIR/.units.env" ]]; then
+  printf 'no .units.env in %s; generating it...\n' "$WT_DIR"
   "$ROOT/.scripts/units-env.sh"
 fi
-set -a; . ./.units.env; set +a
+set -a; . "$WT_DIR/.units.env"; set +a
 
 for v in RAILS_IMAGE NVIM_IMAGE CLAUDE_IMAGE PLAYWRIGHT_IMAGE RUBY_VERSION NODE_VERSION PLAYWRIGHT_VERSION; do
   [[ -n "${!v:-}" ]] || die "$v missing from .units.env -- regenerate it: mise run podman:env"

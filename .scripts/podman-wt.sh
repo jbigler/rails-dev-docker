@@ -14,6 +14,10 @@ ROOT="$(find_project_root)"
 : "${CURRENT_WORKTREE_NAME:?CURRENT_WORKTREE_NAME unset (mise env not loaded)}"
 P="$PROJECT_PREFIX"
 W="$CURRENT_WORKTREE_NAME"
+# Never $PWD: mise runs tasks from config_root, so $PWD is the wrapper root
+# whichever worktree you invoke from. The units use <root>/<worktree> paths,
+# so everything here must agree with that.
+WT_DIR="$ROOT/$W"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 unit() { printf '%s-%s@%s.service' "$P" "$1" "$W"; }
@@ -30,7 +34,7 @@ require_units() {
 }
 
 require_env() {
-  [[ -f "$PWD/.units.env" ]] || {
+  [[ -f "$WT_DIR/.units.env" ]] || {
     printf 'no .units.env in this worktree; generating it...\n'
     "$ROOT/.scripts/units-env.sh"
   }
@@ -86,8 +90,8 @@ diagnose_failure() {
   # Missing images are the most common cause and produce no obvious error --
   # podman tries to pull localhost/... which cannot succeed, so the unit sits
   # in activating until it times out.
-  if [[ -f "$PWD/.units.env" ]]; then
-    ( set -a; . "$PWD/.units.env"; set +a
+  if [[ -f "$WT_DIR/.units.env" ]]; then
+    ( set -a; . "$WT_DIR/.units.env"; set +a
       printf 'Images the units reference:\n' >&2
       for img in "$RAILS_IMAGE" "$NVIM_IMAGE" "$CLAUDE_IMAGE" "$PLAYWRIGHT_IMAGE"; do
         if podman image exists "$img" 2>/dev/null; then
@@ -171,13 +175,13 @@ cmd_exec() {
   require_env
   printf 'rails is not running; using a transient container\n' >&2
   systemctl --user start "$(unit db)" "$(unit redis)" 2>/dev/null || true
-  set -a; . "$PWD/.units.env"; set +a
+  set -a; . "$WT_DIR/.units.env"; set +a
   exec podman run --rm -it \
     --network "$P-$W-dev" \
     --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
     --label traefik.enable=false \
-    --env-file "$ROOT/.docker-config/.env" --env-file "$PWD/.units.env" \
-    -v "$PWD:/app:z" -v "$ROOT/.home/$W:/home/appuser:z" \
+    --env-file "$ROOT/.docker-config/.env" --env-file "$WT_DIR/.units.env" \
+    -v "$WT_DIR:/app:z" -v "$ROOT/.home/$W:/home/appuser:z" \
     -v "${GEM_VOLUME}:/usr/local/bundle" \
     -v "$P-$W-node-modules:/app/node_modules:U" \
     --entrypoint "" "$RAILS_IMAGE" "$@"
