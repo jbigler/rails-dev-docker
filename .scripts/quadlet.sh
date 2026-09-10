@@ -230,9 +230,9 @@ cmd_spike() {
   printf 'spike container up; giving Traefik 5s to discover it...\n'
   sleep 5
   printf 'routers Traefik knows about:\n'
-  curl -fsS http://wt.localhost/api/http/routers 2>/dev/null \
+  curl -fsS --max-time 5 http://127.0.0.1:8080/api/http/routers 2>/dev/null \
     | grep -oE "\"name\":\"[^\"]*\"" | sed 's/^/  /' \
-    || printf '  could not reach the Traefik API at http://wt.localhost/api\n'
+    || printf '  could not reach the Traefik API on 127.0.0.1:8080\n'
   printf '\nexpect a router named %s@docker above, and:\n' "$spike_name"
   printf '  curl -H "Host: spike.localhost" http://127.0.0.1/  -> nginx welcome page\n'
   curl -fsS -H 'Host: spike.localhost' http://127.0.0.1/ 2>/dev/null \
@@ -260,11 +260,77 @@ cmd_allow_ports() {
   fi
 }
 
+# Answer the one thing `podman ps` cannot: has Traefik actually discovered the
+# containers through the podman socket? Deliberately queries Traefik's API on
+# its published port rather than through its own routing (wt.localhost/api),
+# so it still reports correctly when discovery is exactly what is broken.
+cmd_verify() {
+  FAILED=0
+  local api="http://127.0.0.1:8080/api"
+
+  printf '\n== proxy containers ==\n'
+  local c
+  for c in traefik dozzle home; do
+    if [[ "$(podman inspect "${PROJECT_PREFIX}-$c" --format '{{.State.Running}}' 2>/dev/null)" == "true" ]]; then
+      ok "${PROJECT_PREFIX}-$c running"
+    else
+      bad "${PROJECT_PREFIX}-$c not running: systemctl --user start ${PROJECT_PREFIX}-$c"
+    fi
+  done
+
+  printf '\n== traefik api (published port, not routed) ==\n'
+  if curl -fsS --max-time 5 "$api/overview" >/dev/null 2>&1; then
+    ok "reachable at $api"
+  elif (( FAILED )); then
+    bad "unreachable at $api -- start the proxy first: mise run podman:proxy"
+    printf '\n'; return 1
+  else
+    bad "unreachable at $api even though traefik is running. Its API is not
+        answering; check: podman logs ${PROJECT_PREFIX}-traefik"
+    printf '\n'; return 1
+  fi
+
+  printf '\n== did traefik discover the containers over the podman socket? ==\n'
+  local routers want
+  routers="$(curl -fsS --max-time 5 "$api/http/routers" 2>/dev/null \
+    | grep -oE '"name":"[^"]+"' | sed 's/.*:"//; s/"$//')"
+  if [[ -z "$routers" ]]; then
+    bad "traefik knows about NO routers, so the socket mount or the docker
+        provider is not working. Check:
+            systemctl --user status podman.socket
+            podman logs ${PROJECT_PREFIX}-traefik"
+  else
+    printf '%s\n' "$routers" | sed 's/^/      /'
+    for want in wt-home wt-logs wt-api; do
+      if printf '%s\n' "$routers" | grep -q "^${want}@"; then
+        ok "$want discovered"
+      else
+        bad "$want missing -- labels on that container are not being picked up"
+      fi
+    done
+  fi
+
+  printf '\n== end-to-end routing ==\n'
+  local host code
+  for host in wt.localhost logs.localhost; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H "Host: $host" \
+      http://127.0.0.1/ 2>/dev/null || echo 000)"
+    case "$code" in
+      2*|3*) ok "http://$host -> $code" ;;
+      *)     bad "http://$host -> $code" ;;
+    esac
+  done
+
+  printf '\n'
+  return $FAILED
+}
+
 case "${1:-}" in
   install)   cmd_install ;;
   uninstall) cmd_uninstall ;;
   doctor)    cmd_doctor ;;
   spike)     cmd_spike ;;
+  verify)    cmd_verify ;;
   allow-ports) cmd_allow_ports ;;
-  *) die "usage: $(basename "$0") {install|uninstall|doctor|spike|allow-ports}" ;;
+  *) die "usage: $(basename "$0") {install|uninstall|doctor|verify|spike|allow-ports}" ;;
 esac

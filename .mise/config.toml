@@ -566,3 +566,7 @@ for u in traefik dozzle home; do
 done
 systemctl --user --no-pager --no-legend list-units "${PROJECT_PREFIX}-*"
 '''
+
+[tasks."podman:verify"]
+description = "Check that Traefik actually discovered the proxy containers over the podman socket, and that routing works end to end."
+run = "{{config_root}}/.scripts/quadlet.sh verify"
