@@ -128,13 +128,26 @@ require_prefix() {
 
 PROXY_UNITS=(traefik dozzle home)
 
+cmd_proxy_status() {
+  printf '\n'
+  systemctl --user --no-pager --no-legend list-units "${PROJECT_PREFIX}-traefik.service" \
+    "${PROJECT_PREFIX}-dozzle.service" "${PROJECT_PREFIX}-home.service" 2>/dev/null \
+    | sed 's/^/  /' || true
+  printf '\n'
+  podman ps --filter "name=^${PROJECT_PREFIX}-\(traefik\|dozzle\|home\)$" \
+    --format 'table {{.Names}} {{.Status}} {{.Ports}}' 2>/dev/null || true
+  printf '\n  dashboard  http://wt.localhost\n'
+  printf '  logs       http://logs.localhost\n'
+  printf '  traefik    http://127.0.0.1:8080/\n'
+}
+
 cmd_proxy_up() {
   require_prefix
   local u
   for u in "${PROXY_UNITS[@]}"; do
     systemctl --user start "${PROJECT_PREFIX}-$u.service"
   done
-  cmd_status
+  cmd_proxy_status
 }
 
 cmd_proxy_down() {
@@ -153,7 +166,7 @@ cmd_proxy_restart() {
   for u in "${PROXY_UNITS[@]}"; do
     systemctl --user restart "${PROJECT_PREFIX}-$u.service"
   done
-  cmd_status
+  cmd_proxy_status
 }
 
 cmd_proxy_logs() {
@@ -468,9 +481,10 @@ case "${1:-}" in
   verify)    cmd_verify ;;
   allow-ports) cmd_allow_ports ;;
   proxy-up)      cmd_proxy_up ;;
+  proxy-status)  cmd_proxy_status ;;
   proxy-down)    cmd_proxy_down ;;
   proxy-restart) cmd_proxy_restart ;;
   proxy-logs)    shift; cmd_proxy_logs "$@" ;;
   proxy-pull)    cmd_proxy_pull ;;
-  *) die "usage: $(basename "$0") {install|uninstall|doctor|verify|spike|allow-ports|proxy-up|proxy-down|proxy-restart|proxy-logs|proxy-pull}" ;;
+  *) die "usage: $(basename "$0") {install|uninstall|doctor|verify|spike|allow-ports|proxy-up|proxy-status|proxy-down|proxy-restart|proxy-logs|proxy-pull}" ;;
 esac

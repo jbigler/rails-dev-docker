@@ -630,3 +630,7 @@ run = "{{config_root}}/.scripts/podman-wt.sh test:system"
 [tasks.init]
 description = "Clone the Rails app into a default-branch-named folder as the base worktree (ID 0), write ports.registry and render its mise.local.toml. Usage: mise run init <user/repo | git-url>"
 run = "{{config_root}}/.scripts/init-repo.sh"
+
+[tasks."podman:proxy:status"]
+description = "Show the proxy stack's unit and container state plus its URLs."
+run = "{{config_root}}/.scripts/quadlet.sh proxy-status"
