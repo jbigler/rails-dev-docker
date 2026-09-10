@@ -36,18 +36,48 @@ require_env() {
   }
 }
 
+# systemd reports only "A dependency job for X failed" and does not name the
+# dependency. `systemctl --user --failed` often shows nothing either, because a
+# oneshot that failed during a cancelled job does not stay in failed state. So
+# walk the units this worktree owns and report each one's real state, plus the
+# journal tail for whichever actually failed.
+diagnose_failure() {
+  local svc u state result
+  printf '\nstart failed. State of this worktree'\''s units:\n\n' >&2
+  for svc in net-network db redis rustfs-init rustfs playwright rails; do
+    u="$(unit "$svc")"
+    state="$(systemctl --user show -p ActiveState --value "$u" 2>/dev/null)"
+    result="$(systemctl --user show -p Result --value "$u" 2>/dev/null)"
+    case "$state" in
+      active)     printf '  ok      %-14s active\n' "$svc" >&2 ;;
+      activating) printf '  ...     %-14s activating\n' "$svc" >&2 ;;
+      "")         printf '  MISSING %-14s no such unit -- run: mise run podman:install\n' "$svc" >&2 ;;
+      *)          printf '  FAILED  %-14s %s (result=%s)\n' "$svc" "$state" "${result:-?}" >&2 ;;
+    esac
+  done
+  printf '\n' >&2
+  for svc in net-network db redis rustfs-init rustfs playwright; do
+    u="$(unit "$svc")"
+    state="$(systemctl --user show -p ActiveState --value "$u" 2>/dev/null)"
+    [[ "$state" == "failed" || "$state" == "inactive" ]] || continue
+    [[ -n "$state" ]] || continue
+    printf '=== journal: %s ===\n' "$u" >&2
+    journalctl --user -u "$u" -n 15 --no-pager 2>/dev/null \
+      | grep -vE '^-- (Boot|No entries)' | sed 's/^/  /' >&2
+    printf '\n' >&2
+  done
+  printf 'Common causes, in order of likelihood:\n' >&2
+  printf '  1. images not built yet          -> mise run podman:build\n' >&2
+  printf '  2. templates not installed       -> mise run podman:install\n' >&2
+  printf '  3. host prerequisites            -> mise run podman:doctor\n' >&2
+}
+
 cmd_up() {
   require_units; require_env
   # One unit; systemd pulls the network, data services and proxy in through
   # Requires=/Wants=, and gates rails on db/redis/rustfs being *healthy*.
   printf 'starting %s (dependencies resolve automatically)...\n' "$(unit rails)"
-  systemctl --user start "$(unit rails)" || {
-    printf '\nstart failed. The dependency that failed is usually clearer than\n' >&2
-    printf 'the rails failure itself:\n' >&2
-    printf '  systemctl --user --failed | grep %s\n' "$W" >&2
-    printf '  journalctl --user -u %s -n 40\n' "$(unit rails)" >&2
-    exit 1
-  }
+  systemctl --user start "$(unit rails)" || { diagnose_failure; exit 1; }
   cmd_status
 }
 

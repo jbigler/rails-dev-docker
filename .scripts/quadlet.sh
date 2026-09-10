@@ -47,17 +47,23 @@ render() {
 # the unit starts, which surfaces as a systemd dependency failure several units
 # deep -- much easier to catch here.
 subnet_in_use_by() {
-  local want="$1" engine ids
+  local want="$1" engine ids id own="${PROJECT_PREFIX}_proxy"
   for engine in podman docker; do
     command -v "$engine" >/dev/null 2>&1 || continue
     ids="$("$engine" network ls -q 2>/dev/null || true)"
     [[ -n "$ids" ]] || continue
-    if "$engine" network inspect $ids 2>/dev/null \
-         | grep -oiE '"subnet": *"[^"]+"' \
-         | grep -oE '[0-9.]+/[0-9]+' \
-         | grep -qxF "$want"; then
-      printf '%s' "$engine"; return 0
-    fi
+    for id in $ids; do
+      # Skip this stack's own proxy network. It holds the subnet precisely
+      # because the proxy is running, which is the healthy state -- flagging it
+      # told you to renumber a working setup.
+      [[ "$("$engine" network inspect "$id" --format '{{.Name}}' 2>/dev/null)" == "$own" ]] && continue
+      if "$engine" network inspect "$id" 2>/dev/null \
+           | grep -oiE '"subnet": *"[^"]+"' \
+           | grep -oE '[0-9.]+/[0-9]+' \
+           | grep -qxF "$want"; then
+        printf '%s' "$engine"; return 0
+      fi
+    done
   done
   return 1
 }
