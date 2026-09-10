@@ -2,7 +2,7 @@
 # Build the four locally built images under podman.
 #
 # Replaces `docker compose build --pull`. Tags and build args are read from this
-# worktree's .units.env rather than recomputed, so the images this produces
+# worktree's unit env file rather than recomputed, so the images this produces
 # cannot drift from the tags the Quadlet units expect.
 #
 # Usage: podman-build.sh [--pull] [service...]
@@ -21,18 +21,22 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # invoke them from, so the worktree has to be derived from its name.
 : "${CURRENT_WORKTREE_NAME:?run from a worktree directory (mise env not loaded)}"
 WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
+# The env file lives in the wrapper, not the worktree: a worktree is a checkout
+# of the app repo, and this file holds POSTGRES_PASSWORD.
+WT_ENV="$ROOT/.units/$CURRENT_WORKTREE_NAME.env"
+
 [[ -d "$WT_DIR" ]] || die "no worktree directory at $WT_DIR"
 
 # Generate it rather than complaining: build-before-up would otherwise be an
 # ordering trap, and podman-wt.sh already self-heals the same way.
-if [[ ! -f "$WT_DIR/.units.env" ]]; then
-  printf 'no .units.env in %s; generating it...\n' "$WT_DIR"
+if [[ ! -f "$WT_ENV" ]]; then
+  printf 'no env file at %s; generating it...\n' "$WT_DIR"
   "$ROOT/.scripts/units-env.sh"
 fi
-set -a; . "$WT_DIR/.units.env"; set +a
+set -a; . "$WT_ENV"; set +a
 
 for v in RAILS_IMAGE NVIM_IMAGE CLAUDE_IMAGE PLAYWRIGHT_IMAGE RUBY_VERSION NODE_VERSION PLAYWRIGHT_VERSION; do
-  [[ -n "${!v:-}" ]] || die "$v missing from .units.env -- regenerate it: mise run podman:env"
+  [[ -n "${!v:-}" ]] || die "$v missing from $WT_ENV -- regenerate it: mise run podman:env"
 done
 
 PULL=()

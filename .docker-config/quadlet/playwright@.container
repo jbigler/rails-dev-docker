@@ -17,7 +17,7 @@ Network=@@P@@-%i-dev
 NetworkAlias=playwright
 Network=@@P@@-proxy.network
 
-EnvironmentFile=@@ROOT@@/%i/.units.env
+EnvironmentFile=@@ROOT@@/.units/%i.env
 
 # Expose the browser server to host-side system tests, loopback only.
 PublishPort=127.0.0.1:${PLAYWRIGHT_HOST_PORT}:8888
@@ -49,7 +49,7 @@ Entrypoint=entrypoint-playwright.sh
 # expanded by systemd from the service environment, so the same file has to be
 # loaded here too. Both lines are needed and neither is redundant: this one
 # resolves the unit's own keys, the [Container] one gives the process its env.
-EnvironmentFile=@@ROOT@@/%i/.units.env
+EnvironmentFile=@@ROOT@@/.units/%i.env
 Restart=on-failure
 RestartSec=5
 

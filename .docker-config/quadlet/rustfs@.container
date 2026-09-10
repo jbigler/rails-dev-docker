@@ -11,7 +11,7 @@ ContainerName=@@P@@-%i-rustfs
 Network=@@P@@-%i-dev
 NetworkAlias=rustfs
 Network=@@P@@-proxy.network
-EnvironmentFile=@@ROOT@@/%i/.units.env
+EnvironmentFile=@@ROOT@@/.units/%i.env
 Environment=RUSTFS_VOLUMES=/data/rustfs{0..3}
 Environment=RUSTFS_ACCESS_KEY=rustfsadmin
 Environment=RUSTFS_SECRET_KEY=rustfsadmin
@@ -51,6 +51,6 @@ LogOpt=max-size=20m
 # expanded by systemd from the service environment, so the same file has to be
 # loaded here too. Both lines are needed and neither is redundant: this one
 # resolves the unit's own keys, the [Container] one gives the process its env.
-EnvironmentFile=@@ROOT@@/%i/.units.env
+EnvironmentFile=@@ROOT@@/.units/%i.env
 Restart=on-failure
 RestartSec=5

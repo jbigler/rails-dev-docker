@@ -18,6 +18,9 @@ W="$CURRENT_WORKTREE_NAME"
 # whichever worktree you invoke from. The units use <root>/<worktree> paths,
 # so everything here must agree with that.
 WT_DIR="$ROOT/$W"
+# The env file lives in the wrapper, not the worktree: a worktree is a checkout
+# of the app repo, and this file holds POSTGRES_PASSWORD.
+WT_ENV="$ROOT/.units/$W.env"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 unit() { printf '%s-%s@%s.service' "$P" "$1" "$W"; }
@@ -55,7 +58,7 @@ require_home() {
 # (the kitty socket, /usr/bin/kitten) that are legitimately absent until you
 # actually run them.
 missing_mount_sources() {
-  ( set -a; . "$WT_DIR/.units.env"; set +a
+  ( set -a; . "$WT_ENV"; set +a
     local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" svc f line src
     for svc in db redis rustfs-init rustfs rails playwright; do
       f="$ROOT/.docker-config/quadlet/$svc@.container"
@@ -94,13 +97,13 @@ require_mounts() {
   done
   printf '\nEach one fails the unit with "statfs <path>: no such file or\n' >&2
   printf 'directory" and exit 125. Create them, or fix the value in\n' >&2
-  printf '%s/.units.env that points at them.\n' "$W" >&2
+  printf '%s\n' "$WT_ENV" >&2
   exit 1
 }
 
 require_env() {
-  [[ -f "$WT_DIR/.units.env" ]] || {
-    printf 'no .units.env in this worktree; generating it...\n'
+  [[ -f "$WT_ENV" ]] || {
+    printf 'no env file for this worktree; generating it...\n'
     "$ROOT/.scripts/units-env.sh"
   }
 }
@@ -180,8 +183,8 @@ diagnose_failure() {
   # Missing images are the most common cause and produce no obvious error --
   # podman tries to pull localhost/... which cannot succeed, so the unit sits
   # in activating until it times out.
-  if [[ -f "$WT_DIR/.units.env" ]]; then
-    ( set -a; . "$WT_DIR/.units.env"; set +a
+  if [[ -f "$WT_ENV" ]]; then
+    ( set -a; . "$WT_ENV"; set +a
       printf 'Images the units reference:\n' >&2
       for img in "$RAILS_IMAGE" "$NVIM_IMAGE" "$CLAUDE_IMAGE" "$PLAYWRIGHT_IMAGE"; do
         if podman image exists "$img" 2>/dev/null; then
@@ -310,12 +313,12 @@ cmd_exec() {
   require_env; require_home
   printf 'rails is not running; using a transient container\n' >&2
   systemctl --user start "$(unit db)" "$(unit redis)" 2>/dev/null || true
-  set -a; . "$WT_DIR/.units.env"; set +a
+  set -a; . "$WT_ENV"; set +a
   exec podman run --rm -it \
     --network "$P-$W-dev" \
     --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
     --label traefik.enable=false \
-    --env-file "$ROOT/.docker-config/.env" --env-file "$WT_DIR/.units.env" \
+    --env-file "$ROOT/.docker-config/.env" --env-file "$WT_ENV" \
     -v "$WT_DIR:/app:z" -v "$ROOT/.home/$W:/home/appuser:z" \
     -v "${GEM_VOLUME}:/usr/local/bundle" \
     -v "$P-$W-node-modules:/app/node_modules:U" \
