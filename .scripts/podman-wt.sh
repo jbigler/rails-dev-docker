@@ -38,6 +38,66 @@ require_units() {
     || die "the installed units are out of date; see above"
 }
 
+# The docker path calls this from six mise tasks; the podman path called it from
+# none, which is why rails died on `statfs .../.home/master`. Idempotent, so it
+# is cheap to run on every up.
+require_home() {
+  "$ROOT/.scripts/seed-home.sh" "$W"
+}
+
+# podman refuses to start a container whose bind-mount source is missing --
+# "Error: statfs <path>: no such file or directory", exit 125 -- where the
+# Docker daemon would have created it, as root, which is the very thing
+# seed-home.sh exists to prevent. That difference is invisible until first boot,
+# and podman reports one path per attempt, so check them all at once.
+#
+# Only the services `up` starts are checked. nvim@ and claude@ mount things
+# (the kitty socket, /usr/bin/kitten) that are legitimately absent until you
+# actually run them.
+missing_mount_sources() {
+  ( set -a; . "$WT_DIR/.units.env"; set +a
+    local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" svc f line src
+    for svc in db redis rustfs-init rustfs rails playwright; do
+      f="$ROOT/.docker-config/quadlet/$svc@.container"
+      [[ -f "$f" ]] || continue
+      while IFS= read -r line; do
+        src="${line#Volume=}"; src="${src%%:*}"
+        src="${src//@@ROOT@@/$ROOT}"; src="${src//@@P@@/$P}"
+        src="${src//%i/$W}"; src="${src//%h/$HOME}"; src="${src//%t/$rt}"
+        # ${VAR} is resolved by systemd at runtime, so resolve it here too.
+        # eval only after asserting the path holds nothing but path characters
+        # -- no spaces, no backticks, no $( -- since these are our own
+        # templates and the alternative is hand-listing every variable.
+        if [[ "$src" == *'${'* ]]; then
+          # The class must include $ itself, or every ${VAR} path fails the
+          # guard and is skipped -- silently passing the check it exists for.
+          [[ "$src" =~ ^[A-Za-z0-9_./%'$''{''}'~:-]+$ ]] || {
+            printf 'warn: not checking %s (unexpected characters)\n' "$src" >&2
+            continue
+          }
+          eval "src=$src"
+        fi
+        [[ "$src" == /* ]] || continue   # a named volume, which podman creates
+        [[ -e "$src" ]] || printf '%s\t%s\n' "$svc" "$src"
+      done < <(grep '^Volume=' "$f")
+    done )
+}
+
+require_mounts() {
+  local out
+  out="$(missing_mount_sources)"
+  [[ -n "$out" ]] || return 0
+  printf 'error: these bind-mount sources do not exist, and podman will not\n' >&2
+  printf 'create them the way the Docker daemon did:\n\n' >&2
+  printf '%s\n' "$out" | while IFS=$'\t' read -r svc src; do
+    printf '  %-12s %s\n' "$svc" "$src" >&2
+  done
+  printf '\nEach one fails the unit with "statfs <path>: no such file or\n' >&2
+  printf 'directory" and exit 125. Create them, or fix the value in\n' >&2
+  printf '%s/.units.env that points at them.\n' "$W" >&2
+  exit 1
+}
+
 require_env() {
   [[ -f "$WT_DIR/.units.env" ]] || {
     printf 'no .units.env in this worktree; generating it...\n'
@@ -140,7 +200,7 @@ diagnose_failure() {
 }
 
 cmd_up() {
-  require_units; require_env
+  require_units; require_env; require_home; require_mounts
   # One unit; systemd pulls the network, data services and proxy in through
   # Requires=/Wants=, and gates rails on db/redis/rustfs being *healthy*.
   printf 'starting %s (dependencies resolve automatically)...\n' "$(unit rails)"
@@ -247,7 +307,7 @@ cmd_exec() {
   if [[ "$(podman inspect "$ct" --format '{{.State.Running}}' 2>/dev/null)" == "true" ]]; then
     exec podman exec -it "$ct" "$@"
   fi
-  require_env
+  require_env; require_home
   printf 'rails is not running; using a transient container\n' >&2
   systemctl --user start "$(unit db)" "$(unit redis)" 2>/dev/null || true
   set -a; . "$WT_DIR/.units.env"; set +a
@@ -263,7 +323,7 @@ cmd_exec() {
 }
 
 cmd_test_system() {
-  require_units; require_env
+  require_units; require_env; require_home; require_mounts
   # Ensure playwright is up, but never stop it afterwards. A Claude instance
   # inside the claude container may be running system tests against the same
   # browser server, and it cannot restart one we tore out from under it -- it
