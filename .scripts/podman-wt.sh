@@ -44,6 +44,20 @@ require_env() {
 diagnose_failure() {
   local svc u state result
   printf '\nstart failed. State of this worktree'\''s units:\n\n' >&2
+  # Workspace-scoped units first. rails@ Requires= the proxy network (implied by
+  # Network=<prefix>-proxy.network) and Wants= traefik, so a failure there
+  # cancels the rails job while every per-worktree unit still looks fine --
+  # which is exactly the blind spot an earlier version of this had.
+  for u in "${PROJECT_PREFIX}-proxy-network.service" "${PROJECT_PREFIX}-traefik.service"; do
+    state="$(systemctl --user show -p ActiveState --value "$u" 2>/dev/null)"
+    result="$(systemctl --user show -p Result --value "$u" 2>/dev/null)"
+    case "$state" in
+      active)     printf '  ok      %-22s active\n' "${u%.service}" >&2 ;;
+      "")         printf '  MISSING %-22s no such unit\n' "${u%.service}" >&2 ;;
+      *)          printf '  FAILED  %-22s %s (result=%s)\n' "${u%.service}" "$state" "${result:-?}" >&2 ;;
+    esac
+  done
+  printf '\n' >&2
   for svc in net-network db redis rustfs-init rustfs playwright rails; do
     u="$(unit "$svc")"
     state="$(systemctl --user show -p ActiveState --value "$u" 2>/dev/null)"
@@ -56,16 +70,35 @@ diagnose_failure() {
     esac
   done
   printf '\n' >&2
-  for svc in net-network db redis rustfs-init rustfs playwright; do
-    u="$(unit "$svc")"
+  # Include activating: a unit stuck there is usually the cause (a healthcheck
+  # that never passes, or podman trying to pull an image that was never built),
+  # and its journal says which.
+  for u in "${PROJECT_PREFIX}-proxy-network.service" \
+           "$(unit net-network)" "$(unit db)" "$(unit redis)" \
+           "$(unit rustfs-init)" "$(unit rustfs)" "$(unit playwright)"; do
     state="$(systemctl --user show -p ActiveState --value "$u" 2>/dev/null)"
-    [[ "$state" == "failed" || "$state" == "inactive" ]] || continue
-    [[ -n "$state" ]] || continue
+    [[ "$state" == "failed" || "$state" == "activating" ]] || continue
     printf '=== journal: %s ===\n' "$u" >&2
     journalctl --user -u "$u" -n 15 --no-pager 2>/dev/null \
       | grep -vE '^-- (Boot|No entries)' | sed 's/^/  /' >&2
     printf '\n' >&2
   done
+  # Missing images are the most common cause and produce no obvious error --
+  # podman tries to pull localhost/... which cannot succeed, so the unit sits
+  # in activating until it times out.
+  if [[ -f "$PWD/.units.env" ]]; then
+    ( set -a; . "$PWD/.units.env"; set +a
+      printf 'Images the units reference:\n' >&2
+      for img in "$RAILS_IMAGE" "$NVIM_IMAGE" "$CLAUDE_IMAGE" "$PLAYWRIGHT_IMAGE"; do
+        if podman image exists "$img" 2>/dev/null; then
+          printf '  ok      %s\n' "$img" >&2
+        else
+          printf '  MISSING %s  <- mise run podman:build\n' "$img" >&2
+        fi
+      done
+      printf '\n' >&2 )
+  fi
+
   printf 'Common causes, in order of likelihood:\n' >&2
   printf '  1. images not built yet          -> mise run podman:build\n' >&2
   printf '  2. templates not installed       -> mise run podman:install\n' >&2
