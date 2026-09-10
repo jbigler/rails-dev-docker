@@ -128,14 +128,47 @@ cmd_stop() {
 }
 
 cmd_down() {
-  # Destructive, mirroring the docker `down` task, which removed volumes.
+  # Destructive, mirroring the docker `down` task, which removed volumes. The
+  # confirmation lives here rather than only in the mise task because these
+  # scripts get called directly too, which bypasses mise's confirm entirely.
+  # Defaults to No: `down` is one keystroke from `stop`, and the difference
+  # between them is this worktree's database.
+  local vols=("$P-$W-db-data" "$P-$W-rustfs-data" "$P-$W-node-modules")
+  local v present=()
+  for v in "${vols[@]}"; do
+    podman volume exists "$v" 2>/dev/null && present+=("$v")
+  done
+
+  if (( ${#present[@]} == 0 )); then
+    printf 'No volumes to remove for worktree %s; stopping only.\n' "$W"
+    cmd_stop
+    return
+  fi
+
+  printf '\nThis will DELETE the following volumes for worktree %s:\n' "$W"
+  printf '  %s\n' "${present[@]}"
+  printf '\nThe database and any uploaded rustfs objects go with them.\n'
+  printf 'If you meant to stop the containers and keep the data, use:\n'
+  printf '    mise run podman:stop\n\n'
+
+  if [[ "${FORCE:-}" == "1" ]]; then
+    printf 'FORCE=1 set; proceeding without asking.\n'
+  elif [[ -t 0 ]]; then
+    local reply=""
+    read -r -p "Delete these volumes? [y/N] " reply
+    case "$reply" in
+      y|Y|yes|YES) ;;
+      *) printf 'Aborted; nothing was removed. Containers left running.\n'; return ;;
+    esac
+  else
+    die "refusing to delete volumes without a terminal to confirm at.
+  Re-run interactively, or set FORCE=1 if you are sure."
+  fi
+
   cmd_stop
   printf '\nremoving this worktree'\''s volumes...\n'
-  local v
-  for v in "$P-$W-db-data" "$P-$W-rustfs-data" "$P-$W-node-modules"; do
-    if podman volume exists "$v"; then
-      podman volume rm "$v" >/dev/null && printf '  removed %s\n' "$v"
-    fi
+  for v in "${present[@]}"; do
+    podman volume rm "$v" >/dev/null && printf '  removed %s\n' "$v"
   done
   # The cross-worktree volumes (gems, npm caches, nvim share, playwright
   # browsers, claude plugins) are deliberately untouched: they are shared, and
