@@ -31,6 +31,11 @@ require_units() {
   systemctl --user cat "$(unit rails)" >/dev/null 2>&1 \
     || die "$(unit rails) does not exist. Install the units first:
     mise run podman:install"
+  # Refuse rather than warn. Starting units that no longer match the templates
+  # burns a cycle and reports the *previous* failure, which reads as a fix that
+  # did not work instead of a fix that was never installed -- twice now.
+  "$ROOT/.scripts/quadlet.sh" check-stale >/dev/null \
+    || die "the installed units are out of date; see above"
 }
 
 require_env() {

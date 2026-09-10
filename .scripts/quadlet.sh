@@ -161,6 +161,41 @@ lint_env_expansion() {
   return 1
 }
 
+# The generated units live in ~/.config/containers/systemd, so editing a
+# template in the repo -- or checking out a branch that does -- changes nothing
+# until install re-renders them. systemd then keeps running the old ExecStart and
+# reports the *old* failure, which reads as "the fix did not work" rather than
+# "the fix was never installed". So compare what is installed against what the
+# templates would render, and say which files drifted.
+#
+# Installed files carry the marker line as line 1, hence tail -n +2.
+stale_units() {
+  local src b out
+  shopt -s nullglob
+  for src in "$ROOT"/.docker-config/quadlet/*; do
+    b="$(basename "$src")"
+    out="$DEST/${PROJECT_PREFIX}-${b}"
+    if [[ ! -f "$out" ]]; then
+      printf '%s\tnot installed\n' "${PROJECT_PREFIX}-${b}"
+    elif ! diff -q <(render "$src") <(tail -n +2 "$out") >/dev/null 2>&1; then
+      printf '%s\tdiffers from the template\n' "${PROJECT_PREFIX}-${b}"
+    fi
+  done
+}
+
+cmd_check_stale() {
+  local out
+  out="$(stale_units)"
+  [[ -n "$out" ]] || { printf 'installed units match the templates\n'; return 0; }
+  printf 'These installed units no longer match .docker-config/quadlet/:\n\n' >&2
+  printf '%s\n' "$out" | while IFS=$'\t' read -r name why; do
+    printf '  %-40s %s\n' "$name" "$why" >&2
+  done
+  printf '\nsystemd is still running the old generated units. Re-render them:\n' >&2
+  printf '  mise run podman:install\n' >&2
+  return 1
+}
+
 cmd_install() {
   require_hard
   lint_templates || die "refusing to install templates that would silently lose data"
@@ -305,6 +340,19 @@ cmd_doctor() {
           startable and would fight for 127.0.0.1:80:
               rm ~/.config/containers/systemd/{$(installed_prefixes | grep -v "^${PROJECT_PREFIX}$" | paste -sd, -)}-*
               systemctl --user daemon-reload"
+  fi
+
+  # The failure this catches: a template fixed in the repo, or a branch checked
+  # out, without a reinstall. systemd keeps running the old generated unit and
+  # reports the old error, which looks like the fix not working.
+  local drift
+  drift="$(stale_units | cut -f1 | paste -sd' ' -)"
+  if [[ -n "$drift" ]]; then
+    bad "installed units are out of date: $drift
+        Re-render them, or every start reports the previous failure:
+            mise run podman:install"
+  else
+    ok "installed units match the templates"
   fi
 
   printf '\n== podman ==\n'
@@ -577,6 +625,7 @@ cmd_verify() {
 
 case "${1:-}" in
   install)   cmd_install ;;
+  check-stale) cmd_check_stale ;;
   uninstall) cmd_uninstall ;;
   doctor)    cmd_doctor ;;
   spike)     cmd_spike ;;
@@ -588,5 +637,5 @@ case "${1:-}" in
   proxy-restart) cmd_proxy_restart ;;
   proxy-logs)    shift; cmd_proxy_logs "$@" ;;
   proxy-pull)    cmd_proxy_pull ;;
-  *) die "usage: $(basename "$0") {install|uninstall|doctor|verify|spike|allow-ports|proxy-up|proxy-status|proxy-down|proxy-restart|proxy-logs|proxy-pull}" ;;
+  *) die "usage: $(basename "$0") {install|check-stale|uninstall|doctor|verify|spike|allow-ports|proxy-up|proxy-status|proxy-down|proxy-restart|proxy-logs|proxy-pull}" ;;
 esac
