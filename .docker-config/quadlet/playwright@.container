@@ -1,0 +1,52 @@
+[Unit]
+Description=Playwright browser server for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+Wants=@@P@@-traefik.service
+After=@@P@@-traefik.service
+
+[Container]
+# Tag keyed by the Playwright version this worktree's Gemfile.lock pins, so a
+# gem bump builds the matching server image.
+Image=${PLAYWRIGHT_IMAGE}
+ContainerName=@@P@@-%i-playwright
+Network=@@P@@-%i-dev
+NetworkAlias=selenium
+Network=@@P@@-proxy.network
+
+EnvironmentFile=@@ROOT@@/%i/.units.env
+
+# Expose the browser server to host-side system tests, loopback only.
+PublishPort=127.0.0.1:${PLAYWRIGHT_HOST_PORT}:8888
+PodmanArgs=--add-host ${WORKTREE_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${S3_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${RUSTFS_UI_HOST}:${PODMAN_TRAEFIK_IP}
+
+ShmSize=1g
+RunInit=yes
+AddCapability=NET_ADMIN
+AddCapability=NET_RAW
+
+Volume=@@ROOT@@/.docker-config/entrypoint-playwright.sh:/usr/local/bin/entrypoint-playwright.sh:ro,z
+Volume=@@ROOT@@/.docker-config/init-firewall-playwright.sh:/usr/local/bin/init-firewall-playwright.sh:ro,z
+
+Label=traefik.enable=true
+Label=traefik.http.routers.@@P@@-%i-vnc.rule=Host(`vnc.${WORKTREE_HOST}`)
+Label=traefik.http.routers.@@P@@-%i-vnc.entrypoints=web
+Label=traefik.http.routers.@@P@@-%i-vnc.service=@@P@@-%i-vnc
+Label=traefik.http.services.@@P@@-%i-vnc.loadbalancer.server.port=8080
+
+PodmanArgs=--cpus=${CPUS_25}
+LogDriver=k8s-file
+LogOpt=max-size=20m
+Entrypoint=entrypoint-playwright.sh
+
+[Service]
+Restart=no
+
+# Deliberately not started with the rest of the stack. This reserves 1GB of
+# shared memory and is only needed while system tests run, so `mise run
+# test:system` starts it and stops it afterwards. Traefik picks the VNC route
+# up automatically when it appears -- discovery is label-driven and dynamic --
+# so vnc.<slug>.localhost 502s until a test run brings it up.

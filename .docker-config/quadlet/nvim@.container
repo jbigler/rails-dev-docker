@@ -1,0 +1,57 @@
+[Unit]
+Description=Neovim server for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+
+[Container]
+Image=${NVIM_IMAGE}
+ContainerName=@@P@@-%i-nvim
+Network=@@P@@-%i-dev
+NetworkAlias=nvim
+UserNS=keep-id:uid=1000,gid=1000
+User=1000:1000
+
+EnvironmentFile=@@ROOT@@/.docker-config/.env
+EnvironmentFile=@@ROOT@@/%i/.units.env
+Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock
+Environment=RUSTFS_ENDPOINT=http://rustfs:9000
+
+# Loopback only -- nvim RPC allows arbitrary command execution.
+PublishPort=127.0.0.1:${NVIM_PORT}:7777
+
+Volume=@@ROOT@@/.home/%i:/home/appuser:z
+Volume=@@ROOT@@/%i:/app:z
+Volume=${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:z
+Volume=${NVIM_CONFIG_DIR}:/home/appuser/.config/nvim:ro,z
+Volume=${SSH_PATH}:/home/appuser/.ssh:ro,z
+# Host ssh-agent. Sockets cross the keep-id boundary correctly -- verified
+# with both a named volume and a host bind mount -- so the already-unlocked
+# host key is reused instead of prompting per container.
+Volume=${SSH_AGENT_SOCK}:/tmp/ssh-agent.sock:ro,z
+Volume=@@ROOT@@/.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro,z
+Volume=%h/.config/git/ignore:/home/appuser/.config/git/ignore:ro,z
+# kitty remote control for vim-kitty-navigator: the plugin shells out to
+# `kitten @` from the nvim server in here. The host's kitten links only libc so
+# it runs as-is. The socket *directory* is mounted, not the socket (whose name
+# carries the kitty PID), so a kitty restart needs no container recreate, and
+# rw because connect(2) wants write on the socket.
+Volume=/usr/bin/kitten:/usr/bin/kitten:ro
+Volume=%h/.local/state/kitty:/kitty-sock:z
+Volume=${GEM_VOLUME}:/usr/local/bundle
+Volume=@@P@@-%i-node-modules:/app/node_modules:U
+Volume=@@P@@_npm_cache:/home/appuser/.npm:U
+Volume=@@P@@_npm_global:/home/appuser/.npm-global:U
+Volume=@@P@@_nvim_share:/home/appuser/.local/share/nvim:U
+
+PodmanArgs=--cpus=${CPUS_25} --tty --interactive
+LogDriver=k8s-file
+LogOpt=max-size=20m
+Entrypoint=entrypoint-nvim.sh
+Exec=/usr/local/bin/nvim --headless --listen 0.0.0.0:7777
+
+[Service]
+Restart=on-failure
+RestartSec=5

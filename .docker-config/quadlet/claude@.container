@@ -1,0 +1,70 @@
+[Unit]
+Description=Claude Code for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+
+[Container]
+Image=${CLAUDE_IMAGE}
+ContainerName=@@P@@-%i-claude
+Network=@@P@@-%i-dev
+NetworkAlias=claude
+UserNS=keep-id:uid=1000,gid=1000
+User=1000:1000
+
+EnvironmentFile=@@ROOT@@/.docker-config/.env
+EnvironmentFile=@@ROOT@@/%i/.units.env
+Environment=NODE_OPTIONS=--max-old-space-size=4096
+Environment=POWERLEVEL9K_DISABLE_GITSTATUS=true
+Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock
+Environment=RUSTFS_ENDPOINT=http://rustfs:9000
+
+Volume=@@ROOT@@/.home/%i:/home/appuser:z
+# Worktree-specific mount point, kept so host paths differ per worktree in
+# prompts and logs even though homes are per-worktree now.
+Volume=@@ROOT@@/%i:/app-%i:z
+Volume=@@ROOT@@/.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro,z
+# Claude's file memory: the one directory every worktree and host session
+# shares. Homes are per-worktree and wt:rm deletes them, so memory kept under
+# .home/<slug> would die with the worktree.
+Volume=@@ROOT@@/.docker-config/claude-memory:/home/appuser/.claude/projects/-app-%i/memory:z
+# Mounted, not baked into the image (repo convention): script edits take effect
+# on the next start without a rebuild.
+Volume=@@ROOT@@/.docker-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro,z
+Volume=@@ROOT@@/.docker-config/init-firewall.sh:/usr/local/bin/init-firewall.sh:ro,z
+# Session-state drop zone for the wt.localhost badge: the status hook writes
+# /status/<worktree>.json and the proxy's home container serves it read-only.
+Volume=@@ROOT@@/.docker-config/claude-status-hook.sh:/usr/local/bin/claude-status-hook.sh:ro,z
+Volume=@@ROOT@@/.docker-config/status:/status:z
+Volume=${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:z
+Volume=${SSH_PATH}:/home/appuser/.ssh:ro,z
+Volume=${SSH_AGENT_SOCK}:/tmp/ssh-agent.sock:ro,z
+Volume=%h/.config/git/ignore:/home/appuser/.config/git/ignore:ro,z
+Volume=${GEM_VOLUME}:/usr/local/bundle
+Volume=@@P@@-%i-node-modules:/app-%i/node_modules:U
+Volume=@@P@@_npm_cache:/home/appuser/.npm:U
+Volume=@@P@@_npm_global:/home/appuser/.npm-global:U
+# The two shared plugin payload dirs. Deliberately NOT one volume at
+# ~/.claude/plugins: known_marketplaces.json and installed_plugins.json live
+# between them and must stay in the per-worktree bind-mounted home, or
+# claude:template:promote/apply stops seeing the plugin records.
+Volume=@@P@@_claude_plugins_cache:/home/appuser/.claude/plugins/cache:U
+Volume=@@P@@_claude_plugins_marketplaces:/home/appuser/.claude/plugins/marketplaces:U
+
+WorkingDir=/app-%i
+AddCapability=NET_ADMIN
+AddCapability=NET_RAW
+PodmanArgs=--cpus=${CPUS_50} --tty --interactive
+LogDriver=k8s-file
+LogOpt=max-size=20m
+Entrypoint=entrypoint-claude.sh
+
+[Service]
+Restart=no
+
+# No [Install], and never started with the stack. This replaces compose's
+# `profiles: ["do_not_start"]` -- and is a stronger guarantee, since
+# podman-compose ignores profiles entirely and would launch this container,
+# with NET_ADMIN and a live OAuth token, on every `up`.

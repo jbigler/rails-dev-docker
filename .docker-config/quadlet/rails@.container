@@ -1,0 +1,77 @@
+[Unit]
+Description=Rails dev server for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+# The data services must be healthy, not merely started. Notify=healthy on
+# each of them is what makes this a real gate (podman >= 5 only; on 4.x it
+# silently degrades to --sdnotify=conmon).
+Requires=@@P@@-db@%i.service @@P@@-redis@%i.service @@P@@-rustfs@%i.service
+After=@@P@@-db@%i.service @@P@@-redis@%i.service @@P@@-rustfs@%i.service
+# Wants, not Requires: starting a worktree pulls the proxy up, but a Traefik
+# problem must not take the dev server down with it. This replaces the mise
+# `depends=["proxy:up"]`, and works however the unit is started.
+Wants=@@P@@-traefik.service
+After=@@P@@-traefik.service
+
+[Container]
+# Shared tag keyed by runtime versions, so one image serves every worktree on
+# the same ruby/node combination rather than one per project.
+Image=${RAILS_IMAGE}
+ContainerName=@@P@@-%i-rails
+Network=@@P@@-%i-dev
+NetworkAlias=rails
+Network=@@P@@-proxy.network
+
+# Rootless podman maps container UID 0 to the host UID, so a container running
+# as a non-root user cannot write to a bind mount you own. keep-id maps the
+# host UID onto 1000, which is the UID the image builds appuser with. This
+# replaces the APP_USER_UID/APP_GROUP_GID build args entirely.
+UserNS=keep-id:uid=1000,gid=1000
+User=1000:1000
+
+EnvironmentFile=@@ROOT@@/.docker-config/.env
+EnvironmentFile=@@ROOT@@/%i/.units.env
+
+# Traefik-routed hosts resolve to Traefik's static proxy-network address; its
+# host ports are loopback-bound, so host-gateway cannot reach them.
+PodmanArgs=--add-host ${WORKTREE_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${S3_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${RUSTFS_UI_HOST}:${PODMAN_TRAEFIK_IP}
+# Loopback only -- a remote debug session is arbitrary code execution.
+PublishPort=127.0.0.1:${RUBY_DEBUG_PORT}:38698
+
+Volume=@@ROOT@@/%i:/app:z
+Volume=@@ROOT@@/.home/%i:/home/appuser:z
+Volume=${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro,z
+Volume=@@ROOT@@/.docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro,z
+# No :U -- /usr/local/bundle is not under a bind mount, so podman's copy-up
+# from the image populates the volume with appuser ownership already.
+Volume=${GEM_VOLUME}:/usr/local/bundle
+# :U on every volume mounted *under* a bind-mounted path. There is no image
+# content to copy up through a bind mount, so a fresh named volume would mount
+# root-owned and appuser could not write it. This is what the `up` task's
+# manual chown was working around.
+Volume=@@P@@-%i-node-modules:/app/node_modules:U
+Volume=@@P@@_npm_cache:/home/appuser/.npm:U
+Volume=@@P@@_npm_global:/home/appuser/.npm-global:U
+Volume=@@P@@_playwright_browsers:/home/appuser/.cache/ms-playwright:U
+
+Label=traefik.enable=true
+Label=traefik.http.routers.@@P@@-%i-app.rule=Host(`${WORKTREE_HOST}`)
+Label=traefik.http.routers.@@P@@-%i-app.entrypoints=web
+Label=traefik.http.services.@@P@@-%i-app.loadbalancer.server.port=3000
+
+PodmanArgs=--cpus=${CPUS_75}
+LogDriver=k8s-file
+LogOpt=max-size=20m
+Entrypoint=entrypoint-app.sh
+Exec=bin/dev
+
+[Service]
+Restart=on-failure
+RestartSec=5
+# The entrypoint waits on postgres and redis before booting Puma; systemd's 90s
+# default would kill the start job mid-wait and report a timeout instead of the
+# script's own diagnosis.
+TimeoutStartSec=180

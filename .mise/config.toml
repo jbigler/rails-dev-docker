@@ -570,3 +570,7 @@ systemctl --user --no-pager --no-legend list-units "${PROJECT_PREFIX}-*"
 [tasks."podman:verify"]
 description = "Check that Traefik actually discovered the proxy containers over the podman socket, and that routing works end to end."
 run = "{{config_root}}/.scripts/quadlet.sh verify"
+
+[tasks."podman:env"]
+description = "Write this worktree's .units.env, the per-worktree values the Quadlet templates read. Rerun after a ruby/node/playwright bump. Run from a worktree."
+run = "{{config_root}}/.scripts/units-env.sh"
