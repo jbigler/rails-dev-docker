@@ -365,6 +365,26 @@ cmd_verify() {
     esac
   done
 
+  # The dashboard fetches /api/http/routers same-origin, which only works if
+  # the wt-api router (Host(wt.localhost) && PathPrefix(/api) -> api@internal)
+  # wins over wt-home. When it does not, the request falls through to nginx and
+  # comes back as an HTML 404 -- which the dashboard reports as
+  # "Failed to load: Unexpected token '<'". Checking the API on :8080 directly
+  # does NOT catch this, because that bypasses Traefik's own routing.
+  local ctype
+  ctype="$(curl -s -o /dev/null -w '%{content_type}' --max-time 5 \
+    -H 'Host: wt.localhost' http://127.0.0.1/api/http/routers 2>/dev/null || echo none)"
+  case "$ctype" in
+    application/json*) ok "wt.localhost/api routes to Traefik's API (JSON)" ;;
+    text/html*)        bad "wt.localhost/api returns HTML, not JSON: the wt-api router is not
+        intercepting, so the request is falling through to nginx. The
+        dashboard will show \"Failed to load: Unexpected token '<'\".
+        Compare Traefik's own view:
+            curl -s http://127.0.0.1:8080/api/http/routers | grep -o '\"name\":\"wt-api[^\"]*\"'
+            curl -s http://127.0.0.1:8080/api/overview" ;;
+    *)                 bad "wt.localhost/api returned content-type '$ctype'" ;;
+  esac
+
   printf '\n'
   return $FAILED
 }
