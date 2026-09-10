@@ -17,8 +17,12 @@ CTX="$ROOT/.docker-config"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-[[ -f ./.units.env ]] || die "no .units.env in $PWD.
-  Run this from a worktree, after: mise run podman:env"
+# Generate it rather than complaining: build-before-up would otherwise be an
+# ordering trap, and podman-wt.sh already self-heals the same way.
+if [[ ! -f ./.units.env ]]; then
+  printf 'no .units.env in this worktree; generating it...\n'
+  "$ROOT/.scripts/units-env.sh"
+fi
 set -a; . ./.units.env; set +a
 
 for v in RAILS_IMAGE NVIM_IMAGE CLAUDE_IMAGE PLAYWRIGHT_IMAGE RUBY_VERSION NODE_VERSION PLAYWRIGHT_VERSION; do

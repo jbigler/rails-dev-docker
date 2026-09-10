@@ -615,3 +615,7 @@ run = "{{config_root}}/.scripts/podman-wt.sh exec bin/rails console"
 [tasks."podman:test:system"]
 description = "Run system tests, ensuring playwright is up first. Does not stop it afterwards -- a Claude session in the claude container may be using the same browser server. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh test:system"
+
+[tasks.init]
+description = "Clone the Rails app into a default-branch-named folder as the base worktree (ID 0), write ports.registry and render its mise.local.toml. Usage: mise run init <user/repo | git-url>"
+run = "{{config_root}}/.scripts/init-repo.sh"
