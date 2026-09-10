@@ -281,6 +281,34 @@ cmd_down() {
   printf 'kept the shared volumes (gems, npm, nvim, playwright, claude plugins)\n'
 }
 
+# The third-party images only. rails/nvim/claude/playwright live under
+# localhost/ -- built by `mise run build`, never pushed -- so pulling them
+# cannot succeed, which is why compose needed --ignore-buildable here. Read the
+# tags out of the templates rather than repeating them, so a version bump in a
+# unit file cannot drift from what this pulls.
+cmd_pull() {
+  local img imgs=()
+  local f
+  for f in db redis rustfs rustfs-init; do
+    img="$(sed -n 's/^Image=//p' "$ROOT/.docker-config/quadlet/$f@.container" | head -1)"
+    [[ -n "$img" && "$img" != localhost/* && "$img" != '${'* ]] || continue
+    imgs+=("$img")
+  done
+  (( ${#imgs[@]} )) || die "found no third-party images in the templates"
+  local failed=()
+  for img in "${imgs[@]}"; do
+    printf '\npulling %s\n' "$img"
+    podman pull "$img" || failed+=("$img")
+  done
+  if (( ${#failed[@]} )); then
+    printf '\nfailed to pull:\n' >&2
+    printf '  %s\n' "${failed[@]}" >&2
+    exit 1
+  fi
+  printf '\nAll third-party images up to date. Locally built images:\n'
+  printf '  mise run build\n'
+}
+
 cmd_restart() { require_units; systemctl --user restart "$(unit rails)"; cmd_status; }
 
 cmd_status() {
@@ -305,16 +333,27 @@ cmd_logs() {
 # load-balances into a container that is not serving, which shows up as
 # intermittent 502s on a host that looks otherwise healthy.
 cmd_exec() {
-  local ct="$P-$W-rails"
+  local ct="$P-$W-rails" e extra=()
   (( $# )) || set -- /bin/bash
-  if [[ "$(podman inspect "$ct" --format '{{.State.Running}}' 2>/dev/null)" == "true" ]]; then
-    exec podman exec -it "$ct" "$@"
+  # EXEC_ENV carries the per-task overrides compose passed with -e
+  # (DISABLE_COVERAGE for the test watcher, DISABLE_LOGCRAFT for the console).
+  for e in ${EXEC_ENV:-}; do extra+=(--env "$e"); done
+  # EXEC_FRESH forces the transient container even when rails is up. The test
+  # watchers and ci need it: compose used `run` for those deliberately, because
+  # quitting a watcher attached to the rails container takes the server down
+  # with it, and a ci run should not share a process space with the dev server.
+  if [[ "${EXEC_FRESH:-}" != 1 ]] \
+     && [[ "$(podman inspect "$ct" --format '{{.State.Running}}' 2>/dev/null)" == "true" ]]; then
+    exec podman exec -it ${extra[@]+"${extra[@]}"} "$ct" "$@"
   fi
   require_env; require_home
   printf 'rails is not running; using a transient container\n' >&2
   systemctl --user start "$(unit db)" "$(unit redis)" 2>/dev/null || true
   set -a; . "$WT_ENV"; set +a
-  exec podman run --rm -it \
+  # The npm and playwright volumes matter here, not just in rails@: `npx vitest`
+  # resolves through .npm-global, and a system test run needs the browsers. A
+  # compose `run` inherited the whole service definition and got them for free.
+  exec podman run --rm -it ${extra[@]+"${extra[@]}"} \
     --network "$P-$W-dev" \
     --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
     --label traefik.enable=false \
@@ -322,6 +361,9 @@ cmd_exec() {
     -v "$WT_DIR:/app:z" -v "$ROOT/.home/$W:/home/appuser:z" \
     -v "${GEM_VOLUME}:/usr/local/bundle" \
     -v "$P-$W-node-modules:/app/node_modules:U" \
+    -v "${P}_npm_cache:/home/appuser/.npm:U" \
+    -v "${P}_npm_global:/home/appuser/.npm-global:U" \
+    -v "${P}_playwright_browsers:/home/appuser/.cache/ms-playwright:U" \
     --entrypoint "" "$RAILS_IMAGE" "$@"
 }
 
@@ -340,10 +382,11 @@ case "${1:-}" in
   up)          shift; cmd_up ;;
   stop)        shift; cmd_stop ;;
   down)        shift; cmd_down ;;
+  pull)        shift; cmd_pull ;;
   restart)     shift; cmd_restart ;;
   status)      shift; cmd_status ;;
   logs)        shift; cmd_logs "$@" ;;
   exec)        shift; cmd_exec "$@" ;;
   test:system) shift; cmd_test_system "$@" ;;
-  *) die "usage: $(basename "$0") {up|stop|down|restart|status|logs [svc]|exec [cmd...]|test:system}" ;;
+  *) die "usage: $(basename "$0") {up|stop|down|restart|pull|status|logs [svc]|exec [cmd...]|test:system}" ;;
 esac

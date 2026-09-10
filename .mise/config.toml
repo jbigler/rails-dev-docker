@@ -88,8 +88,8 @@ run = """
 alias = "v"
 
 [tasks.rails]
-description = "Enter the running Rails container."
-run = "docker compose exec rails /bin/zsh"
+description = "Shell into the running Rails container for this worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh exec /bin/zsh"
 
 [tasks.test]
 description = "Run the full local test suite: Rails unit tests then the JavaScript tests. System tests are not included — run 'test:rails_system' for those."
@@ -110,195 +110,45 @@ depends = ["up", "log:trim"]
 # final summary. `raw` hands the terminal through and they stream as they run.
 raw = true
 usage = 'arg "[args]" var=#true help="args forwarded to bin/rails test (e.g. test/models/foo.rb:42, -n /pattern/, --seed 123)"'
-run = """
-  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
-    docker compose exec rails bin/rails test $usage_args
-  else
-    docker compose run --label "traefik.enable=false" --rm rails bin/rails test $usage_args
-  fi
-"""
+run = "{{config_root}}/.scripts/podman-wt.sh exec bin/rails test $usage_args"
 alias = "tr"
 
 [tasks."test:rails_watcher"]
 description = "Start the Retest runner — reruns the matching Rails test on every file save."
 depends = ["up", "log:trim"]
 # The parallel sibling deps put mise in prefixed-output mode (see `test:rails`),
-# which pipes stdio and kills the TTY `-it` needs ("cannot attach stdin to a
-# TTY-enabled container"). `raw` hands the terminal straight to the container.
+# which pipes stdio and kills the TTY podman's -it needs. `raw` hands the
+# terminal straight to the container.
 raw = true
-# No `docker compose exec` fast path like console/tjw have: quitting the watcher
-# takes the rails container down with it. Always a throwaway `run` container.
+# EXEC_FRESH: never `podman exec` here. Quitting the watcher would take the rails
+# container down with it, so this always gets its own throwaway container --
+# which cmd_exec labels traefik.enable=false, so Traefik does not round-robin
+# the worktree host onto a container that is not serving :3000.
 run = """
   CMD='gem list -i retest > /dev/null 2>&1 || gem install retest && retest --rails'
-  # `docker compose run` inherits the rails service's traefik labels + proxy network,
-  # so the one-off container registers as a second backend for the worktree host.
-  # Traefik then round-robins onto it (nothing on :3000) → 502s. Opt it out.
-  docker compose run -e DISABLE_COVERAGE=true --label "traefik.enable=false" --rm -it rails sh -c "$CMD"
+  EXEC_FRESH=1 EXEC_ENV=DISABLE_COVERAGE=true \
+    {{config_root}}/.scripts/podman-wt.sh exec sh -c "$CMD"
 """
 alias = "trw"
 
-[tasks."test:rails_system"]
-description = "Run the Rails system tests. Pass any 'rails test:system' args (files, file:line, -n, --seed, ...) to run a subset."
-depends = ["up", "log:trim"]
-# Same prefixed-output problem as `test:rails` — see the comment there.
-raw = true
-usage = 'arg "[args]" var=#true help="args forwarded to the test runner (e.g. test/system/foo_test.rb:42, --seed 123)"'
-# `rails test:system` hardcodes the whole test/system dir, so when a specific test
-# file is given, run it through the `rails test` runner (which honors explicit paths).
-# Otherwise stick with `test:system` so flags like --seed/-n apply to the full suite.
-run = """
-  case "$usage_args" in
-    *_test.rb*) test_target="test $usage_args" ;;
-    *)          test_target="test:system $usage_args" ;;
-  esac
-  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
-    docker compose exec rails bin/rails $test_target
-  else
-    docker compose run --label "traefik.enable=false" --rm rails bin/rails $test_target
-  fi
-"""
-alias = "trs"
-
-# The JS tests are Vitest + jsdom — no database, no server, no browser. They only
-# need the rails image (node + node_modules), so these tasks deliberately skip
-# `depends = ["up"]` and fall back to a one-off container when the stack is down.
 [tasks."test:javascript"]
 description = "Run the JavaScript (Vitest) tests once. Pass a file path or any vitest args (-t 'name', --reporter, ...) to run a subset."
 usage = 'arg "[args]" var=#true help="args forwarded to vitest run (e.g. test/javascript/controllers/foo_controller.test.js, -t sums-the-inputs)"'
-run = """
-  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
-    docker compose exec rails npx vitest run $usage_args
-  else
-    {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
-    docker compose run --label "traefik.enable=false" --rm rails npx vitest run $usage_args
-  fi
-"""
+run = "{{config_root}}/.scripts/podman-wt.sh exec npx vitest run $usage_args"
 alias = "tj"
 
 [tasks."test:javascript_watcher"]
 description = "Start Vitest in watch mode — the JS TDD loop. Pass a file path or vitest args to narrow what it watches."
 usage = 'arg "[args]" var=#true help="args forwarded to vitest (e.g. test/javascript/controllers/foo_controller.test.js)"'
-run = """
-  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
-    docker compose exec rails npx vitest $usage_args
-  else
-    {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
-    docker compose run --label "traefik.enable=false" --rm -it rails npx vitest $usage_args
-  fi
-"""
+run = "{{config_root}}/.scripts/podman-wt.sh exec npx vitest $usage_args"
 alias = "tjw"
-
-[tasks.console]
-description = "Enter the Rails console. Any args are forwarded to bin/rails console (e.g. -e production, --sandbox)."
-usage = 'arg "[args]" var=#true help="args forwarded to bin/rails console (e.g. -e production, --sandbox)"'
-run = """
-  if docker compose ps --services --filter "status=running" | grep -q '^rails$'; then
-    docker compose exec rails bin/rails console $usage_args
-  else
-    {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
-    docker compose run -e DISABLE_LOGCRAFT=true --label "traefik.enable=false" --rm -it rails bin/rails console $usage_args
-  fi
-"""
-alias = "c"
-
-[tasks.up]
-description = "Start the application."
-depends = ["proxy:up"]
-run = """
-  # Every worktree shares one compose file and separates itself purely through
-  # the environment, so a COMPOSE_PROJECT_NAME that disagrees with this worktree
-  # yields containers labelled for one worktree but wired to another's source
-  # tree and published ports. They then fail to start with "port is already
-  # allocated" behind a "failed to set up container networking" prefix, which
-  # reads as a network fault and sends you hunting the wrong thing. Refuse to
-  # create them instead.
-  expected_project="${PROJECT_PREFIX}-${CURRENT_WORKTREE_NAME}"
-  if [ "${COMPOSE_PROJECT_NAME:-}" != "$expected_project" ]; then
-    echo "COMPOSE_PROJECT_NAME is '${COMPOSE_PROJECT_NAME:-<unset>}' but this worktree is '${expected_project}'." >&2
-    echo "Containers would be created for another worktree. Start a fresh shell here and retry." >&2
-    exit 1
-  fi
-  # Seed this worktree's home from the template if missing. Covers master
-  # (create-worktree.sh never runs for it) and fresh clones; create-worktree.sh
-  # does the same for new worktrees.
-  {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
-  for vol in "$GEM_VOLUME"; do
-    docker volume inspect "$vol" >/dev/null 2>&1 || docker volume create "$vol" >/dev/null
-  done
-  # Cross-worktree cache volumes, mounted inside the bind-mounted home. A
-  # fresh named volume mounts root-owned and copy-from-image initialization
-  # cannot fix that under a bind mount, so chown once at creation — never
-  # recursively on an existing volume (warm caches stay untouched).
-  for vol in npm_cache npm_global nvim_share playwright_browsers claude_plugins_cache claude_plugins_marketplaces; do
-    name="${PROJECT_PREFIX}_${vol}"
-    if ! docker volume inspect "$name" >/dev/null 2>&1; then
-      docker volume create "$name" >/dev/null
-      docker run --rm -v "$name":/v alpine chown "$(id -u):$(id -g)" /v
-    fi
-  done
-  # PLAYWRIGHT_VERSION is derived from this worktree's Gemfile.lock
-  # (.scripts/playwright-version.sh via mise.local.toml). When it resolves,
-  # image + playwright-core + gem stay in lockstep automatically; when empty
-  # the playwright image falls back to a default tag that can drift.
-  if [ -z "${PLAYWRIGHT_VERSION:-}" ]; then
-    echo "WARN: PLAYWRIGHT_VERSION not derived from Gemfile.lock — playwright image uses its fallback tag and may drift from the gem (older mise.local.toml? re-render from .mise/local.toml.template)" >&2
-  fi
-  # Stopped containers pin network IDs, so a network that was recreated or
-  # pruned while unused leaves them failing with "network <id> not found" —
-  # prune them so compose recreates them attached to the current networks. Same
-  # for containers mounting another worktree's source: they publish that
-  # worktree's ports and collide with it. See the script for both cases.
-  {{config_root}}/.scripts/prune-stale-containers.sh
-  docker compose up -d
-"""
-alias = "u"
-
-[tasks.pull]
-description = "Refresh the third-party images (postgres, redis, rustfs). Skips rails/nvim/claude/playwright — those are built locally, never pushed, so a plain 'docker compose pull' fails on them with 'pull access denied for filial/...'. Run from a worktree."
-run = "docker compose pull --ignore-buildable"
-alias = "p"
-
-[tasks.build]
-description = "Rebuild the locally built images (rails, nvim, claude, playwright) against fresh BASE images — --pull re-fetches the ruby/node/debian FROM layers instead of reusing stale cached ones. Run from a worktree."
-run = "docker compose build --pull"
-alias = "b"
-
-[tasks."proxy:up"]
-description = "Start the shared Traefik reverse proxy (one stack, all worktrees)."
-alias = "proxy"
-run = """
-  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
-  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml up -d
-"""
-
-[tasks."proxy:pull"]
-description = "Pull updated proxy images (traefik, dozzle, nginx) and recreate the proxy stack with them. All three are registry images, so no --ignore-buildable needed here."
-run = """
-  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
-  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml pull
-  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
-  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml up -d
-"""
-
-[tasks."proxy:down"]
-description = "Stop the shared Traefik reverse proxy."
-run = """
-  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
-  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml down
-"""
-
-[tasks."proxy:logs"]
-description = "Tail logs from the Traefik proxy."
-run = """
-  COMPOSE_PROJECT_NAME=${PROJECT_PREFIX}-proxy \
-  docker compose -f {{config_root}}/.docker-config/proxy/compose.yml logs -f
-"""
 
 [tasks.ci]
 description = "Run the CI linting and tests."
+# EXEC_FRESH: its own container, as the compose version used `run` rather than
+# `exec` -- a ci run should not share a process space with the dev server.
 run = """
-  {{config_root}}/.scripts/seed-home.sh "$CURRENT_WORKTREE_NAME"
-  docker compose run --label "traefik.enable=false" rails bundle exec rake ci:build:commit
+  EXEC_FRESH=1 {{config_root}}/.scripts/podman-wt.sh exec bundle exec rake ci:build:commit
 """
 
 [tasks.wt]
@@ -344,31 +194,6 @@ run = '{{config_root}}/.scripts/share-worktree.sh on'
 [tasks."wt:unshare"]
 description = "Stop sharing this worktree over the tailnet."
 run = '{{config_root}}/.scripts/share-worktree.sh off'
-
-[tasks."db:dump"]
-description = "Dump the development database and RustFS data for faster container setup."
-run = """
-  DUMP_DIR="{{ config_root }}/.docker-config/db-dumps"
-  mkdir -p "$DUMP_DIR"
-  : "${DEV_DB_NAME:?DEV_DB_NAME is empty — could not parse it from config/database.yml; set it manually in mise.local.toml}"
-  docker compose exec -T db pg_dump -Fc -U postgres "$DEV_DB_NAME" \
-    > "$DUMP_DIR/$DEV_DB_NAME.dump"
-  echo "DB dump saved."
-  docker run --rm \
-    -v "${COMPOSE_PROJECT_NAME}_rustfs_data:/data:ro" \
-    -v "$DUMP_DIR:/backup" \
-    alpine tar czf /backup/rustfs_data.tar.gz -C /data .
-  echo "RustFS dump saved."
-  echo "All dumps saved to $DUMP_DIR"
-"""
-
-[tasks."db:dump:clear"]
-description = "Remove all dump files so the next container start does a full db:prepare."
-run = """
-  DUMP_DIR="{{ config_root }}/.docker-config/db-dumps"
-  rm -f "$DUMP_DIR"/*.dump "$DUMP_DIR"/*.sql "$DUMP_DIR"/*.sql.gz "$DUMP_DIR"/rustfs_data.tar.gz
-  echo "Cleared all dump files from $DUMP_DIR"
-"""
 
 [tasks.claude]
 description = "Run Claude AI assistant in the current terminal window. Set CLAUDE_NEW_TERM=1 (or run claude:newterm) to open it in a new terminal tab instead."
@@ -506,51 +331,23 @@ run = """
   echo "Done. Your shell may be in a removed directory; run: cd ~"
 """
 
-[tasks.down]
-description = "Tear down the current worktree's docker resources, including its volumes (keeps the worktree folder and built images). Run from a worktree."
-run = """
-  set -e
-  echo "This removes this worktree's containers AND its volumes (database data will be lost)."
-  echo "To only stop the containers, run 'mise run stop' instead."
-  printf "Continue? [y/N] "
-  read -r confirm
-  case "$confirm" in
-    y|Y|yes|YES) ;;
-    *) echo "Aborted."; exit 1 ;;
-  esac
-
-  docker compose down --volumes --remove-orphans
-"""
-
-[tasks.stop]
-description = "Stop the current worktree's containers without removing them or their volumes (unlike 'down'). Resume with 'mise run up'. Leaves the shared proxy running. Run from a worktree."
-run = "docker compose stop"
-alias = "s"
-
-# --- podman conversion (in progress) ---------------------------------------
-# These sit alongside the docker-based tasks above rather than replacing them.
-# The cutover is all-or-nothing per PROJECT_PREFIX: Traefik on podman cannot see
-# containers on Docker's socket and cannot join a Docker network, so the proxy
-# and the worktree stacks have to move together. Until then, use podman:spike to
-# validate discovery without touching the working Docker setup.
-
-[tasks."podman:doctor"]
+[tasks.doctor]
 description = "Check the rootless podman prerequisites: version, socket, privileged-port sysctl, linger."
 run = "{{config_root}}/.scripts/quadlet.sh doctor"
 
-[tasks."podman:install"]
+[tasks."units:install"]
 description = "Render .docker-config/quadlet/ into ~/.config/containers/systemd and reload systemd."
 run = "{{config_root}}/.scripts/quadlet.sh install"
 
-[tasks."podman:uninstall"]
+[tasks."units:uninstall"]
 description = "Remove the rendered Quadlet units and reload systemd."
 run = "{{config_root}}/.scripts/quadlet.sh uninstall"
 
-[tasks."podman:spike"]
+[tasks."verify:spike"]
 description = "Prove Traefik-on-podman discovers and routes to a podman container. Throwaway; needs podman:install first."
 run = "{{config_root}}/.scripts/quadlet.sh spike"
 
-[tasks."podman:allow-ports"]
+[tasks.allow-ports]
 description = "Lower net.ipv4.ip_unprivileged_port_start to 80 so rootless podman can publish Traefik's :80. Needs sudo once."
 run = "{{config_root}}/.scripts/quadlet.sh allow-ports"
 
@@ -558,80 +355,98 @@ run = "{{config_root}}/.scripts/quadlet.sh allow-ports"
 description = "Create the workspace-root mise.local.toml if missing (prompts for the project name, defaulting to the folder name)."
 run = "{{config_root}}/.scripts/local-config.sh"
 
-[tasks."podman:proxy:up"]
+[tasks."proxy:up"]
 description = "Start the podman proxy stack (traefik, dozzle, dashboard). Worktree units pull it in automatically, so this is for using the dashboard without a worktree running."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-up"
 
-[tasks."podman:proxy:down"]
+[tasks."proxy:down"]
 description = "Stop the podman proxy stack and its network."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-down"
 
-[tasks."podman:proxy:restart"]
+[tasks."proxy:restart"]
 description = "Restart the podman proxy stack, recreating its containers."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-restart"
 
-[tasks."podman:proxy:logs"]
+[tasks."proxy:logs"]
 description = "Follow a proxy service's journal (default traefik; e.g. `mise run podman:proxy:logs dozzle`)."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-logs"
 
-[tasks."podman:proxy:pull"]
+[tasks."proxy:pull"]
 description = "Pull updated traefik, dozzle and nginx images and recreate the proxy stack with them."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-pull"
 
-[tasks."podman:verify"]
+[tasks.verify]
 description = "Check that Traefik actually discovered the proxy containers over the podman socket, and that routing works end to end."
 run = "{{config_root}}/.scripts/quadlet.sh verify"
 
-[tasks."podman:env"]
+[tasks."units:env"]
 description = "Write this worktree's unit env file (.units/<name>.env in the workspace root), the per-worktree values the Quadlet templates read. Rerun after a ruby/node/playwright bump. Run from a worktree."
 run = "{{config_root}}/.scripts/units-env.sh"
 
-[tasks."podman:build"]
+[tasks.build]
 description = "Build the rails, nvim, claude and playwright images under podman. Pass --pull to re-fetch the base FROM layers. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-build.sh"
+alias = "b"
 
-[tasks."podman:up"]
+[tasks.up]
 description = "Start this worktree's stack. Starts rails; systemd pulls in the network, db, redis, rustfs and the proxy. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh up"
+alias = "u"
 
-[tasks."podman:stop"]
+[tasks.stop]
 description = "Stop this worktree's containers without removing volumes. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh stop"
+alias = "s"
 
-[tasks."podman:down"]
+[tasks.down]
 description = "Stop this worktree's containers AND delete its db, rustfs and node_modules volumes. Prompts first, defaulting to No. Shared volumes are kept. Run from a worktree."
 # No mise `confirm` here: the script asks, so that a direct invocation is
 # guarded too, and so there is exactly one prompt rather than two.
 run = "{{config_root}}/.scripts/podman-wt.sh down"
 
-[tasks."podman:restart"]
+[tasks.restart]
 description = "Restart this worktree's rails service, recreating the container. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh restart"
 
-[tasks."podman:status"]
+[tasks.status]
 description = "Show this worktree's unit and container state plus its URLs. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh status"
 
-[tasks."podman:logs"]
+[tasks.logs]
 description = "Follow a service's journal for this worktree (default rails; e.g. `mise run podman:logs db`). Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh logs"
 
-[tasks."podman:exec"]
+[tasks.exec]
 description = "Run a command in this worktree's rails container, or a transient one if the stack is down. Defaults to a shell. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh exec"
 
-[tasks."podman:console"]
+[tasks.console]
 description = "Rails console for this worktree. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh exec bin/rails console"
+alias = "c"
 
-[tasks."podman:test:system"]
+[tasks."test:rails_system"]
 description = "Run system tests, ensuring playwright is up first. Does not stop it afterwards -- a Claude session in the claude container may be using the same browser server. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh test:system"
+alias = "trs"
 
 [tasks.init]
 description = "Clone the Rails app into a default-branch-named folder as the base worktree (ID 0), write ports.registry and render its mise.local.toml. Usage: mise run init <user/repo | git-url>"
 run = "{{config_root}}/.scripts/init-repo.sh"
 
-[tasks."podman:proxy:status"]
+[tasks."proxy:status"]
 description = "Show the proxy stack's unit and container state plus its URLs."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-status"
+[tasks."db:dump"]
+description = "Dump this worktree's development database and RustFS objects into .docker-config/db-dumps/. They restore automatically on the next up against an empty db volume. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-db-dump.sh"
+
+[tasks."db:dump:clear"]
+description = "Remove the dump files, so the next up on an empty db volume runs a full db:prepare instead of restoring."
+run = "{{config_root}}/.scripts/podman-db-dump.sh clear"
+
+[tasks.pull]
+description = "Refresh the third-party images (postgres, redis, rustfs). The rails/nvim/claude/playwright images are built locally and never pushed, so they are deliberately excluded -- pulling them would fail on localhost/. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh pull"
+alias = "p"
+
