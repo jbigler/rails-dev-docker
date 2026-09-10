@@ -11,12 +11,18 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 ROOT="$(find_project_root)"
 
 : "${PROJECT_PREFIX:?PROJECT_PREFIX unset (mise env not loaded)}"
-TRAEFIK_IP="${TRAEFIK_IP:-10.213.0.2}"
-PROXY_SUBNET="${PROXY_SUBNET:-10.213.0.0/24}"
-# Not in the mise env today; compose defaulted it inline.
-PROXY_IP_RANGE="${PROXY_IP_RANGE:-10.213.0.128/25}"
+# Deliberately NOT inherited from PROXY_SUBNET/TRAEFIK_IP. Those describe the
+# Docker proxy network, which holds 10.213.0.0/24 while the compose stack still
+# exists -- and netavark refuses to create a network whose subnet is already
+# used on the host ("subnet ... is already used on the host or by another
+# config", exit 125). The podman proxy therefore gets its own range so both can
+# coexist during the transition. After the Docker proxy is gone you can point
+# these at 10.213.x if you prefer, but there is no reason to.
+PODMAN_PROXY_SUBNET="${PODMAN_PROXY_SUBNET:-10.214.0.0/24}"
+PODMAN_PROXY_IP_RANGE="${PODMAN_PROXY_IP_RANGE:-10.214.0.128/25}"
+PODMAN_TRAEFIK_IP="${PODMAN_TRAEFIK_IP:-10.214.0.2}"
 # Compose let Docker pick the gateway; Quadlet wants it named.
-PROXY_GATEWAY="${PROXY_GATEWAY:-${PROXY_SUBNET%.*}.1}"
+PODMAN_PROXY_GATEWAY="${PODMAN_PROXY_GATEWAY:-${PODMAN_PROXY_SUBNET%.*}.1}"
 
 DEST="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
 MARKER="# rendered by .scripts/quadlet.sh"
@@ -30,11 +36,30 @@ FAILED=0
 render() {
   sed -e "s|@@P@@|$PROJECT_PREFIX|g" \
       -e "s|@@ROOT@@|$ROOT|g" \
-      -e "s|@@TRAEFIK_IP@@|$TRAEFIK_IP|g" \
-      -e "s|@@PROXY_SUBNET@@|$PROXY_SUBNET|g" \
-      -e "s|@@PROXY_GATEWAY@@|$PROXY_GATEWAY|g" \
-      -e "s|@@PROXY_IP_RANGE@@|$PROXY_IP_RANGE|g" \
+      -e "s|@@TRAEFIK_IP@@|$PODMAN_TRAEFIK_IP|g" \
+      -e "s|@@PROXY_SUBNET@@|$PODMAN_PROXY_SUBNET|g" \
+      -e "s|@@PROXY_GATEWAY@@|$PODMAN_PROXY_GATEWAY|g" \
+      -e "s|@@PROXY_IP_RANGE@@|$PODMAN_PROXY_IP_RANGE|g" \
       "$1"
+}
+
+# Exact-subnet check across both engines. netavark only reports the clash when
+# the unit starts, which surfaces as a systemd dependency failure several units
+# deep -- much easier to catch here.
+subnet_in_use_by() {
+  local want="$1" engine ids
+  for engine in podman docker; do
+    command -v "$engine" >/dev/null 2>&1 || continue
+    ids="$("$engine" network ls -q 2>/dev/null || true)"
+    [[ -n "$ids" ]] || continue
+    if "$engine" network inspect $ids 2>/dev/null \
+         | grep -oiE '"subnet": *"[^"]+"' \
+         | grep -oE '[0-9.]+/[0-9]+' \
+         | grep -qxF "$want"; then
+      printf '%s' "$engine"; return 0
+    fi
+  done
+  return 1
 }
 
 # Writing unit files needs only podman and a user systemd. The socket, the
@@ -118,6 +143,18 @@ cmd_doctor() {
   else
     bad "no socket at $sock. Enable it:
             systemctl --user enable --now podman.socket"
+  fi
+
+  printf '\n== proxy subnet ==\n'
+  local holder
+  if holder="$(subnet_in_use_by "$PODMAN_PROXY_SUBNET")"; then
+    bad "$PODMAN_PROXY_SUBNET is already used by a $holder network, so netavark
+        will refuse to create it (exit 125, surfacing as a dependency failure
+        for traefik). Pick a free range -- one line, no continuations:
+            PODMAN_PROXY_SUBNET=10.215.0.0/24 PODMAN_PROXY_IP_RANGE=10.215.0.128/25 PODMAN_TRAEFIK_IP=10.215.0.2 mise run podman:install
+        Better: set those three in mise.local.toml so every run picks them up."
+  else
+    ok "$PODMAN_PROXY_SUBNET is free (traefik at $PODMAN_TRAEFIK_IP)"
   fi
 
   printf '\n== privileged port for Traefik :80 ==\n'
