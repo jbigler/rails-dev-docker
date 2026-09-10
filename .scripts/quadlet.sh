@@ -172,6 +172,38 @@ cmd_doctor() {
             sudo sh -c 'echo net.ipv4.ip_unprivileged_port_start=80 > /etc/sysctl.d/99-rootless-ports.conf'"
   fi
 
+  printf '\n== who holds 127.0.0.1:80 ==\n'
+  # Only one process can bind it, so the podman and Docker proxies are mutually
+  # exclusive: whichever is up owns every *.localhost hostname. Without this
+  # check the clash surfaces as "bind: address already in use" from systemd,
+  # several units away from the cause.
+  #
+  # Read /proc/net/tcp rather than ss/netstat -- neither is installed on every
+  # box, and a `command -v` guard around the check silently reports "free",
+  # which is worse than not checking. State 0A is LISTEN, :0050 is port 80,
+  # matching both a loopback (0100007F) and a wildcard (00000000) bind.
+  local holder80=""
+  if awk '$4 == "0A" && $2 ~ /:0050$/ { f=1 } END { exit !f }' /proc/net/tcp 2>/dev/null \
+     || awk '$4 == "0A" && $2 ~ /:0050$/ { f=1 } END { exit !f }' /proc/net/tcp6 2>/dev/null; then
+    holder80="unknown"
+    if [[ "$(podman inspect "${PROJECT_PREFIX}-traefik" --format '{{.State.Running}}' 2>/dev/null)" == "true" ]]; then
+      holder80="podman"
+    elif command -v docker >/dev/null 2>&1 \
+         && docker ps --format '{{.Names}}' 2>/dev/null | grep -q traefik; then
+      holder80="docker"
+    fi
+  fi
+  case "$holder80" in
+    "")      ok ":80 is free" ;;
+    podman)  ok ":80 held by ${PROJECT_PREFIX}-traefik (this stack)" ;;
+    docker)  warn ":80 is held by a Docker traefik. Expected before the cutover, but the
+            podman proxy cannot start until it stops -- only one process can bind
+            127.0.0.1:80, so whichever proxy is up owns every *.localhost host:
+                mise run proxy:down" ;;
+    *)       warn ":80 is bound by a process this script cannot identify. The podman
+            proxy will fail with 'bind: address already in use' until it frees up." ;;
+  esac
+
   printf '\n== systemd user session ==\n'
   if systemctl --user list-units >/dev/null 2>&1; then
     ok "systemd --user reachable"
