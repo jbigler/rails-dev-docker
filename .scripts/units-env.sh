@@ -71,6 +71,12 @@ fi
   printf 'PLAYWRIGHT_IMAGE=localhost/%s/playwright:v%s\n'      "$PROJECT_PREFIX" "$pw"
   printf 'CLAUDE_IMAGE=localhost/%s/claude:latest\n'           "$PROJECT_PREFIX"
   printf '\n'
+  # Also consumed by podman-build.sh as build args, so the image tags it
+  # produces cannot drift from the tags the units expect.
+  printf 'RUBY_VERSION=%s\n'         "$RUBY_VERSION"
+  printf 'NODE_VERSION=%s\n'         "$NODE_VERSION"
+  printf 'PLAYWRIGHT_VERSION=%s\n'   "$pw"
+  printf '\n'
   printf 'GEM_VOLUME=%s\n'            "$GEM_VOLUME"
   printf 'MAIN_WORKTREE_PATH=%s\n'    "$MAIN_WORKTREE_PATH"
   printf 'NVIM_CONFIG_DIR=%s\n'       "$NVIM_CONFIG_DIR"

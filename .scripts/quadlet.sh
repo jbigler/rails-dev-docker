@@ -137,6 +137,18 @@ cmd_doctor() {
     bad "podman not installed"
   fi
 
+  # The Dockerfiles use unqualified base images (debian:bookworm-slim,
+  # node:${NODE_VERSION}-slim), which podman cannot resolve without a search
+  # registry. Fedora/RHEL ship one; Debian/Ubuntu do not.
+  if podman info --format '{{.Registries}}' 2>/dev/null | grep -q docker.io; then
+    ok "unqualified-search-registries includes docker.io"
+  else
+    bad "no unqualified search registry, so the Dockerfiles' short base image
+        names (debian:, node:) will fail to resolve. Add to
+        /etc/containers/registries.conf or ~/.config/containers/registries.conf:
+            unqualified-search-registries = [\"docker.io\"]"
+  fi
+
   printf '\n== rootless podman socket (Traefik + Dozzle read it) ==\n'
   local sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
   if [[ -S "$sock" ]]; then

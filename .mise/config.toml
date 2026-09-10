@@ -574,3 +574,44 @@ run = "{{config_root}}/.scripts/quadlet.sh verify"
 [tasks."podman:env"]
 description = "Write this worktree's .units.env, the per-worktree values the Quadlet templates read. Rerun after a ruby/node/playwright bump. Run from a worktree."
 run = "{{config_root}}/.scripts/units-env.sh"
+
+[tasks."podman:build"]
+description = "Build the rails, nvim, claude and playwright images under podman. Pass --pull to re-fetch the base FROM layers. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-build.sh"
+
+[tasks."podman:up"]
+description = "Start this worktree's stack. Starts rails; systemd pulls in the network, db, redis, rustfs and the proxy. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh up"
+
+[tasks."podman:stop"]
+description = "Stop this worktree's containers without removing volumes. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh stop"
+
+[tasks."podman:down"]
+description = "Stop this worktree's containers AND delete its db, rustfs and node_modules volumes. Shared volumes are kept. Run from a worktree."
+confirm = "This deletes this worktree's database and rustfs data. Continue?"
+run = "{{config_root}}/.scripts/podman-wt.sh down"
+
+[tasks."podman:restart"]
+description = "Restart this worktree's rails service, recreating the container. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh restart"
+
+[tasks."podman:status"]
+description = "Show this worktree's unit and container state plus its URLs. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh status"
+
+[tasks."podman:logs"]
+description = "Follow a service's journal for this worktree (default rails; e.g. `mise run podman:logs db`). Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh logs"
+
+[tasks."podman:exec"]
+description = "Run a command in this worktree's rails container, or a transient one if the stack is down. Defaults to a shell. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh exec"
+
+[tasks."podman:console"]
+description = "Rails console for this worktree. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh exec bin/rails console"
+
+[tasks."podman:test:system"]
+description = "Run system tests, starting playwright for the run and stopping it afterwards so it does not hold 1GB of shm. Run from a worktree."
+run = "{{config_root}}/.scripts/podman-wt.sh test:system"
