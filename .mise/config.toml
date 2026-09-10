@@ -613,5 +613,5 @@ description = "Rails console for this worktree. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh exec bin/rails console"
 
 [tasks."podman:test:system"]
-description = "Run system tests, starting playwright for the run and stopping it afterwards so it does not hold 1GB of shm. Run from a worktree."
+description = "Run system tests, ensuring playwright is up first. Does not stop it afterwards -- a Claude session in the claude container may be using the same browser server. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh test:system"

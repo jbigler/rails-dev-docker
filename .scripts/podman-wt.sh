@@ -122,10 +122,12 @@ cmd_exec() {
 
 cmd_test_system() {
   require_units; require_env
-  printf 'starting playwright for the test run...\n'
+  # Ensure playwright is up, but never stop it afterwards. A Claude instance
+  # inside the claude container may be running system tests against the same
+  # browser server, and it cannot restart one we tore out from under it -- it
+  # has no access to the host's systemd. Idle cost is low anyway: ShmSize is a
+  # tmpfs cap, not a reservation.
   systemctl --user start "$(unit playwright)"
-  # Stop it again whatever happens: it holds 1GB of shared memory.
-  trap "systemctl --user stop '$(unit playwright)' 2>/dev/null || true" EXIT
   cmd_exec bin/rails test:system "$@"
 }
 

@@ -15,6 +15,13 @@ After=@@P@@-db@%i.service @@P@@-redis@%i.service @@P@@-rustfs@%i.service
 # `depends=["proxy:up"]`, and works however the unit is started.
 Wants=@@P@@-traefik.service
 After=@@P@@-traefik.service
+# Playwright comes up with the stack. It is not merely a host-side convenience:
+# system tests are often run by the Claude instance *inside* the claude
+# container, which has no access to the host's systemd and deliberately no
+# podman socket, so it cannot start playwright itself. Wants= rather than
+# Requires= so a playwright failure does not take the dev server down.
+Wants=@@P@@-playwright@%i.service
+After=@@P@@-playwright@%i.service
 
 [Container]
 # Shared tag keyed by runtime versions, so one image serves every worktree on

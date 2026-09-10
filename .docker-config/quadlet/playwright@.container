@@ -43,10 +43,14 @@ LogOpt=max-size=20m
 Entrypoint=entrypoint-playwright.sh
 
 [Service]
-Restart=no
+Restart=on-failure
+RestartSec=5
 
-# Deliberately not started with the rest of the stack. This reserves 1GB of
-# shared memory and is only needed while system tests run, so `mise run
-# test:system` starts it and stops it afterwards. Traefik picks the VNC route
-# up automatically when it appears -- discovery is label-driven and dynamic --
-# so vnc.<slug>.localhost 502s until a test run brings it up.
+# No [Install] -- nothing autostarts at login -- but rails@ Wants= this, so it
+# does come up with the stack, matching the compose behaviour. That is
+# deliberate: system tests are often run by the Claude instance inside the
+# claude container, which cannot reach the host's systemd to start this itself.
+#
+# ShmSize=1g above is a cap on a tmpfs, not a reservation: tmpfs pages are
+# allocated on write, so an idle browser server costs its own RSS and nothing
+# more. Leaving it running is far cheaper than it looks.
