@@ -398,7 +398,14 @@ cmd_exec() {
     exec podman exec -it ${extra[@]+"${extra[@]}"} "$ct" "$@"
   fi
   require_env; require_home
-  printf 'rails is not running; using a transient container\n' >&2
+  # Name the actual reason. EXEC_FRESH is a deliberate choice by the caller
+  # (ci, test:rails_watcher), and reporting it as "rails is not running" when
+  # rails is running sends you looking at the wrong thing.
+  if [[ "${EXEC_FRESH:-}" == 1 ]]; then
+    printf 'EXEC_FRESH=1; using a transient container\n' >&2
+  else
+    printf 'rails is not running; using a transient container\n' >&2
+  fi
   systemctl --user start "$(unit db)" "$(unit redis)" 2>/dev/null || true
   set -a; . "$WT_ENV"; set +a
   # The npm and playwright volumes matter here, not just in rails@: `npx vitest`
