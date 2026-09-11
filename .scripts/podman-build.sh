@@ -53,6 +53,12 @@ common=(
   --build-arg "NODE_VERSION=$NODE_VERSION"
   --build-arg APP_USER_UID=1000
   --build-arg APP_GROUP_GID=1000
+  # The claude-cli stage is shared by the nvim and claude targets, so its args
+  # belong to every build rather than just the claude one -- otherwise the two
+  # images could end up on different Claude Code versions.
+  # UPDATE_CLAUDE_CODE is a cache-buster whose value is never read.
+  --build-arg CLAUDE_CODE_VERSION=latest
+  --build-arg "UPDATE_CLAUDE_CODE=${UPDATE_CLAUDE_CODE:-0}"
 )
 
 build_target() {
@@ -67,9 +73,7 @@ for svc in "${services[@]}"; do
     rails)  build_target rails "$RAILS_IMAGE" ;;
     nvim)   build_target nvim  "$NVIM_IMAGE" ;;
     claude) build_target claude "$CLAUDE_IMAGE" \
-              --build-arg CLAUDE_CODE_VERSION=latest \
-              --build-arg GIT_DELTA_VERSION=0.19.2 \
-              --build-arg "UPDATE_CLAUDE_CODE=${UPDATE_CLAUDE_CODE:-0}" ;;
+              --build-arg GIT_DELTA_VERSION=0.19.2 ;;
     playwright)
       printf '\n==> playwright  ->  %s\n' "$PLAYWRIGHT_IMAGE"
       podman build "${PULL[@]}" -t "$PLAYWRIGHT_IMAGE" \

@@ -166,6 +166,36 @@ CMD ["bin/dev"]
 # ------------------------------------------------------------------------------
 # NVim image
 # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Claude Code CLI -- one download, used by both the nvim and claude images.
+#
+# nvim needs it because the entrypoint installs
+# @agentclientprotocol/claude-agent-acp, and that adapter spawns `claude`. It
+# was previously installed only in the claude stage, so the adapter was present
+# in the nvim container with nothing to run.
+#
+# Built FROM base purely to reuse a layer that already has wget and CA certs;
+# only /opt/claude-code and the wrapper are copied out. The wrapper pins
+# DISABLE_AUTOUPDATER, which is the reason for the direct-binary install rather
+# than the npm package.
+# ------------------------------------------------------------------------------
+
+FROM base AS claude-cli
+USER root
+ARG CLAUDE_CODE_VERSION=latest
+# Cache-buster only; the value is never read. `mise run claude:rebuild` sets it.
+ARG UPDATE_CLAUDE_CODE=0
+RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
+  if [ "$CLAUDE_CODE_VERSION" = "latest" ]; then \
+  CLAUDE_CODE_VERSION=$(wget -qO- https://registry.npmjs.org/@anthropic-ai/claude-code/latest | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'); \
+  fi && \
+  mkdir -p /opt/claude-code/bin && \
+  wget -q -O /opt/claude-code/bin/claude "${GCS_BUCKET}/${CLAUDE_CODE_VERSION}/linux-x64/claude" && \
+  chmod 755 /opt/claude-code/bin/claude && \
+  printf '#!/bin/sh\nexport DISABLE_AUTOUPDATER=1\nexec /opt/claude-code/bin/claude "$@"\n' > /usr/bin/claude && \
+  chmod 755 /usr/bin/claude
+
+
 FROM base as nvim
 USER root
 
@@ -179,6 +209,10 @@ RUN wget -q -O /usr/local/bin/lazygit https://github.com/jesseduffield/lazygit/r
   tar -xvf /usr/local/bin/lazygit -C /usr/local/bin
 
 RUN luarocks install dkjson
+
+# The ACP adapter installed by entrypoint-nvim.sh spawns this.
+COPY --from=claude-cli /opt/claude-code /opt/claude-code
+COPY --from=claude-cli /usr/bin/claude /usr/bin/claude
 
 USER $APP_USER
 
@@ -227,19 +261,10 @@ WORKDIR /app
 ENV EDITOR=nvim
 ENV VISUAL=nvim
 
-ARG CLAUDE_CODE_VERSION=latest
-ARG UPDATE_CLAUDE_CODE=0
-
-# Install Claude Code globally (AUR direct-binary method)
-RUN GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
-  if [ "$CLAUDE_CODE_VERSION" = "latest" ]; then \
-  CLAUDE_CODE_VERSION=$(wget -qO- https://registry.npmjs.org/@anthropic-ai/claude-code/latest | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'); \
-  fi && \
-  mkdir -p /opt/claude-code/bin && \
-  wget -q -O /opt/claude-code/bin/claude "${GCS_BUCKET}/${CLAUDE_CODE_VERSION}/linux-x64/claude" && \
-  chmod 755 /opt/claude-code/bin/claude && \
-  printf '#!/bin/sh\nexport DISABLE_AUTOUPDATER=1\nexec /opt/claude-code/bin/claude "$@"\n' > /usr/bin/claude && \
-  chmod 755 /usr/bin/claude
+# Claude Code, copied from the claude-cli stage so the nvim image gets the same
+# binary and version policy rather than its own.
+COPY --from=claude-cli /opt/claude-code /opt/claude-code
+COPY --from=claude-cli /usr/bin/claude /usr/bin/claude
 
 # Install RTK
 ENV RTK_INSTALL_DIR=/usr/local/bin

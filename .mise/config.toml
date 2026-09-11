@@ -247,7 +247,10 @@ alias = "ai:notoken:newterm"
 description = "Rebuild the Claude image with the latest Claude Code version, busting the layer cache so it actually re-fetches."
 # UPDATE_CLAUDE_CODE is an ARG in the Dockerfile whose only purpose is to
 # invalidate the layer that installs Claude Code; the value is never read.
-run = "UPDATE_CLAUDE_CODE=$(date +%s) {{config_root}}/.scripts/podman-build.sh claude"
+# Both images: the claude-cli stage they share is what the cache-buster
+# invalidates, so rebuilding only claude would leave nvim on the old binary
+# -- and nvim needs it for the ACP adapter.
+run = "UPDATE_CLAUDE_CODE=$(date +%s) {{config_root}}/.scripts/podman-build.sh claude nvim"
 
 [tasks."claude:template:promote"]
 description = "Promote this worktree's Claude config set (agents, hooks, skills, settings, plugin records) to the template that seeds new worktrees. Merges plugin records unless --replace; pass a worktree name to promote another worktree."
