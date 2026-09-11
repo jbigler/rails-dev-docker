@@ -212,13 +212,53 @@ diagnose_failure() {
   printf '  3. host prerequisites            -> mise run doctor\n' >&2
 }
 
+# rails@ Wants= traefik, so starting rails pulls it in -- but only traefik.
+# Nothing pulls in dozzle or home, and the compose `up` had
+# depends = ["proxy:up"], which started all three. Losing the wt.localhost
+# dashboard and logs.localhost on every `up` was a regression from that, so the
+# whole proxy stack starts here.
+#
+# Not a unit dependency: the dashboard belongs to the workspace, not to any one
+# worktree, and making rails@ Want= it would tear it down with the last worktree
+# and rebuild that relationship in every template.
+start_proxy() {
+  local u rc=0
+  for u in traefik dozzle home; do
+    systemctl --user start "${PROJECT_PREFIX}-$u.service" 2>/dev/null || rc=1
+  done
+  return "$rc"
+}
+
+# traefik is the difference between a running app and a reachable one: without
+# it <slug>.localhost resolves to nothing at all, because it is the only thing
+# listening on :80. The unit dependency is deliberately soft -- a traefik crash
+# must not take the dev server down -- but soft must not mean silent, so the
+# task reports it and exits non-zero while leaving the stack up.
+check_proxy() {
+  local state
+  state="$(systemctl --user show -p ActiveState --value "${PROJECT_PREFIX}-traefik.service" 2>/dev/null)"
+  [[ "$state" == "active" ]] && return 0
+  printf '\n' >&2
+  printf 'ERROR: %s-traefik is %s.\n' "$PROJECT_PREFIX" "${state:-missing}" >&2
+  printf '  Your containers are running, but nothing is serving :80, so every\n' >&2
+  printf '  http://*.localhost host for every worktree is unreachable -- Traefik\n' >&2
+  printf '  is the only proxy in front of them.\n\n' >&2
+  printf '  What it says:\n' >&2
+  printf '    journalctl --user -u %s-traefik -n 30 --no-pager\n' "$PROJECT_PREFIX" >&2
+  printf '  Most likely :80 is taken or the sysctl is unset:\n' >&2
+  printf '    mise run doctor\n' >&2
+  return 1
+}
+
 cmd_up() {
   require_units; require_env; require_home; require_mounts
-  # One unit; systemd pulls the network, data services and proxy in through
+  start_proxy || true   # a failure here is reported by check_proxy, with detail
+  # One unit; systemd pulls the network, data services and traefik in through
   # Requires=/Wants=, and gates rails on db/redis/rustfs being *healthy*.
   printf 'starting %s (dependencies resolve automatically)...\n' "$(unit rails)"
   systemctl --user start "$(unit rails)" || { diagnose_failure; exit 1; }
   cmd_status
+  check_proxy || exit 1
 }
 
 cmd_stop() {
@@ -330,6 +370,7 @@ cmd_status() {
     --format 'table {{.Names}} {{.Status}} {{.Ports}}' 2>/dev/null || true
   printf '\n  app        http://%s\n' "${WORKTREE_HOST:-$W.localhost}"
   printf '  s3 / ui    http://%s  http://%s\n' "${S3_HOST:-s3.$W.localhost}" "${RUSTFS_UI_HOST:-s3-ui.$W.localhost}"
+  printf '  dashboard  http://wt.localhost   logs  http://logs.localhost\n'
 }
 
 cmd_logs() {
