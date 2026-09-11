@@ -1,12 +1,19 @@
 #!/bin/zsh
-set -xeuo pipefail
+set -euo pipefail
+# No -x by default: it was the only entrypoint of the four that traced, and the
+# trace interleaves with its own output -- a diagnostic line came out as
+# "nvim_entries=+...> ls -A", which defeats the point of having one. The
+# container log is where you read these now, so keep it readable.
+[[ -n "${ENTRYPOINT_DEBUG:-}" ]] && set -x
 
 mkdir -p ~/.config
 mkdir -p ~/.local
 
-npm install -g mcp-hub@latest
-npm install -g @herb-tools/language-server
-npm install -g @agentclientprotocol/claude-agent-acp
+# --no-fund --no-audit are output-only: these run on every container start and
+# the funding and audit blurbs were most of the log.
+for pkg in mcp-hub@latest @herb-tools/language-server @agentclientprotocol/claude-agent-acp; do
+	npm install -g --no-fund --no-audit "$pkg"
+done
 
 export GIT_TERMINAL_PROMPT=0
 
