@@ -19,7 +19,7 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 # Not $PWD: mise runs tasks from config_root regardless of the directory you
 # invoke them from, so the worktree has to be derived from its name.
-: "${CURRENT_WORKTREE_NAME:?run from a worktree directory (mise env not loaded)}"
+: "${CURRENT_WORKTREE_NAME:?this task acts on a single worktree, so run it from inside one. At the workspace root PROJECT_PREFIX is set but CURRENT_WORKTREE_NAME is not, because that value is defined in the mise.local.toml inside each worktree. Use mise run wt:ls to list them.}"
 WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
 # The env file lives in the wrapper, not the worktree: a worktree is a checkout
 # of the app repo, and this file holds POSTGRES_PASSWORD.

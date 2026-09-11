@@ -22,7 +22,7 @@ ROOT="$(find_project_root)"
 
 action="${1:-on}"
 : "${PROJECT_PREFIX:?run from a worktree directory (mise env not loaded)}"
-: "${CURRENT_WORKTREE_NAME:?CURRENT_WORKTREE_NAME unset (mise env not loaded)}"
+: "${CURRENT_WORKTREE_NAME:?this task acts on a single worktree, so run it from inside one. At the workspace root PROJECT_PREFIX is set but CURRENT_WORKTREE_NAME is not, because that value is defined in the mise.local.toml inside each worktree. Use mise run wt:ls to list them.}"
 P="$PROJECT_PREFIX"
 W="$CURRENT_WORKTREE_NAME"
 WT_ENV="$ROOT/.unit-env/$W.env"

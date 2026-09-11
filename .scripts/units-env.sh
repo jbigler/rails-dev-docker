@@ -15,8 +15,41 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 ROOT="$(find_project_root)"
 
-: "${PROJECT_PREFIX:?run from a worktree directory (mise env not loaded)}"
-: "${CURRENT_WORKTREE_NAME:?CURRENT_WORKTREE_NAME unset (mise env not loaded)}"
+: "${PROJECT_PREFIX:?run from the workspace root or a worktree -- mise env not loaded}"
+
+# Run from the workspace root, regenerate every worktree. CURRENT_WORKTREE_NAME
+# comes from the mise.local.toml inside a worktree, so at the root there is
+# none -- and failing there was unhelpful, because the case that most needs this
+# is a template change, which invalidates every worktree file at once.
+#
+# Each worktree is re-entered through mise rather than computed here: the values
+# come from evaluating that worktree own config -- its .ruby-version, .nvmrc,
+# Gemfile.lock, WORKTREE_ID -- which only mise can do. mise resolves env from
+# the invocation directory even though it runs tasks from config_root.
+if [[ -z "${CURRENT_WORKTREE_NAME:-}" ]]; then
+  root="$(find_project_root)"
+  registry="$root/ports.registry"
+  [[ -f "$registry" ]] || {
+    printf 'error: no %s, so there are no worktrees yet.\n' "$registry" >&2
+    printf '  Create the base worktree first: mise run init <user/repo>\n' >&2
+    exit 1
+  }
+  command -v mise >/dev/null || { printf 'error: mise is not on PATH\n' >&2; exit 1; }
+  rc=0 count=0
+  while IFS=: read -r slug _id; do
+    [[ -n "$slug" ]] || continue
+    if [[ ! -d "$root/$slug" ]]; then
+      printf 'skip %s: no directory -- stale ports.registry entry?\n' "$slug" >&2
+      continue
+    fi
+    printf '\n== %s ==\n' "$slug"
+    # One worktree failing must not stop the others.
+    ( cd "$root/$slug" && mise run units:env ) || rc=1
+    count=$((count + 1))
+  done < "$registry"
+  (( count )) || { printf 'error: %s listed no usable worktrees\n' "$registry" >&2; exit 1; }
+  exit "$rc"
+fi
 
 # Derived from the project root and the worktree name, never from $PWD: mise
 # runs tasks with the working directory set to config_root -- the wrapper root
