@@ -117,6 +117,16 @@ fi
   printf '\n'
   printf 'GEM_VOLUME=%s\n'            "$GEM_VOLUME"
   printf 'MAIN_WORKTREE_PATH=%s\n'    "$MAIN_WORKTREE_PATH"
+  # Warned about here, where you can see it, rather than left to fail the unit.
+  # podman refuses a missing bind source, and rails@ only Wants= nvim@, so a
+  # host without ~/.config/nvim gets a dead editor and a successful `up` --
+  # a silent failure by construction.
+  [[ -d "$NVIM_CONFIG_DIR" ]] || {
+    printf 'warn: NVIM_CONFIG_DIR=%s does not exist on the host.\n' "$NVIM_CONFIG_DIR" >&2
+    printf '      nvim@ will fail to start ("statfs: no such file or directory").\n' >&2
+    printf '      Point NVIM_CONFIG_DIR at your config in mise.local.toml, or\n' >&2
+    printf '      ignore this if you do not use the nvim container.\n' >&2
+  }
   printf 'NVIM_CONFIG_DIR=%s\n'       "$NVIM_CONFIG_DIR"
   printf 'SSH_PATH=%s\n'              "$SSH_PATH"
   # Validated, not just passed through. mise already falls back to /dev/null
