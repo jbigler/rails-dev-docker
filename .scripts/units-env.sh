@@ -119,7 +119,19 @@ fi
   printf 'MAIN_WORKTREE_PATH=%s\n'    "$MAIN_WORKTREE_PATH"
   printf 'NVIM_CONFIG_DIR=%s\n'       "$NVIM_CONFIG_DIR"
   printf 'SSH_PATH=%s\n'              "$SSH_PATH"
-  printf 'SSH_AGENT_SOCK=%s\n'        "$SSH_AGENT_SOCK"
+  # Validated, not just passed through. mise already falls back to /dev/null
+  # when $SSH_AUTH_SOCK is unset, but a *stale* value -- an agent that died, or
+  # a path inherited from another login session -- is worse under podman than it
+  # was under docker: docker created the missing bind source, podman refuses the
+  # whole container with "statfs <path>: no such file or directory". nvim@ would
+  # then fail to start over an ssh agent it does not strictly need.
+  agent_sock="$SSH_AGENT_SOCK"
+  if [[ "$agent_sock" != /dev/null && ! -S "$agent_sock" ]]; then
+    printf 'warn: SSH_AGENT_SOCK=%s is not a socket; falling back to /dev/null\n' "$agent_sock" >&2
+    printf '      (no agent? nvim will fall back to a passphrase prompt)\n' >&2
+    agent_sock=/dev/null
+  fi
+  printf 'SSH_AGENT_SOCK=%s\n'        "$agent_sock"
   printf '\n'
   printf 'CPUS_25=%s\n'               "$CPUS_25"
   printf 'CPUS_50=%s\n'               "$CPUS_50"

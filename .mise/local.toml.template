@@ -1,8 +1,6 @@
 [env]
 CURRENT_WORKTREE_NAME = "{{ exec(command='git rev-parse --show-toplevel') | basename }}"
 MAIN_WORKTREE_PATH = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}"
-COMPOSE_PROJECT_NAME = "{{ env.PROJECT_PREFIX }}-{{ env.CURRENT_WORKTREE_NAME }}"
-COMPOSE_FILE = "{% set dev = '.dev/compose.yml' %}{{config_root}}/../.docker-config/compose.yml{% if dev is exists %}:{{config_root}}/.dev/compose.yml{% endif %}"
 RUBY_DEBUG_LOCAL_FS_MAP = "/app/:{{ cwd }}"
 RUBY_VERSION = "{{ read_file(path='.ruby-version') | trim }}"
 GEM_VOLUME = "{{ env.GEM_VOLUME_BASE }}_ruby_{{ env.RUBY_VERSION | trim | replace(from='.', to='_') }}"
@@ -51,4 +49,7 @@ PLAYWRIGHT_VERSION = "{{ exec(command='../.scripts/playwright-version.sh Gemfile
 # These are host-shell only — inside the containers, .docker-config/.env wins.
 PLAYWRIGHT_HOST_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 18888 + id }}"
 PLAYWRIGHT_HOST = "ws://localhost:{{ env.PLAYWRIGHT_HOST_PORT }}/connect"
-APP_HOST = "host.docker.internal"
+# podman writes both host.containers.internal and host.docker.internal into
+# /etc/hosts (podman-run(1), --add-host), so either name resolves; this is the
+# native one.
+APP_HOST = "host.containers.internal"
