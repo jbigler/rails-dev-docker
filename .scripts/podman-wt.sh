@@ -411,8 +411,18 @@ cmd_exec() {
   # The npm and playwright volumes matter here, not just in rails@: `npx vitest`
   # resolves through .npm-global, and a system test run needs the browsers. A
   # compose `run` inherited the whole service definition and got them for free.
+  # The proxy network and the --add-host entries are not optional extras: the
+  # setup_s3_bucket initializer head_buckets ${RUSTFS_ENDPOINT} on every boot,
+  # and that host only resolves through Traefik. Without them every boot burns
+  # ~25s in the initializer's 5 retries with exponential backoff before giving
+  # up -- which is what made the test watcher unusable. A compose `run`
+  # inherited the service's networks and extra_hosts and so never hit this.
   exec podman run --rm -it ${extra[@]+"${extra[@]}"} \
-    --network "$P-$W-dev" \
+    --network "$P-$W-dev" --network "${P}_proxy" \
+    --add-host "$WORKTREE_HOST:$PODMAN_TRAEFIK_IP" \
+    --add-host "$S3_HOST:$PODMAN_TRAEFIK_IP" \
+    --add-host "$RUSTFS_UI_HOST:$PODMAN_TRAEFIK_IP" \
+    --add-host "$TS_HOST_ENTRY" \
     --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
     --label traefik.enable=false \
     --env-file "$ROOT/.container-config/.env" --env-file "$WT_ENV" \
