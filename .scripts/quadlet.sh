@@ -216,6 +216,16 @@ lint_env_values() {
       bad=1
     done < <(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=.*\$\{' "$f" 2>/dev/null)
   done
+  # A bare NAME is podman's pass-through form and is not shell syntax, so any
+  # script that sources this file dies on "NAME: command not found". That is how
+  # `mise run claude` broke the first time the form was used.
+  while IFS=: read -r f n line; do
+    [[ -n "$line" ]] || continue
+    printf '  %s:%s\n    %s\n    <- shell-sources a podman --env-file; read the values from\n       .unit-env/<worktree>.env instead\n' \
+      "${f#"$ROOT/"}" "$n" "$(printf '%s' "$line" | sed 's/^[[:space:]]*//')" >&2
+    bad=1
+  done < <(grep -nHE '^[^#]*(\.|source)[[:space:]]+"?[^"]*container-config/\.env' "$ROOT"/.scripts/*.sh 2>/dev/null \
+             | sed 's/^\([^:]*\):\([0-9]*\):/\1:\2:/')
   (( bad )) || return 0
   printf '\nerror: podman passes these values verbatim -- the quotes or the\n' >&2
   printf '${...} become part of the value the container sees.\n' >&2

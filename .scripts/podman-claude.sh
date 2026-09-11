@@ -32,7 +32,12 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
                         "$ROOT/.scripts/units-env.sh" >&2; }
 "$ROOT/.scripts/seed-home.sh" "$W" >&2
 
-set -a; . "$ROOT/.container-config/.env"; . "$WT_ENV"; set +a
+# Only the unit env file. .container-config/.env is a podman --env-file, NOT a
+# shell file: it uses podman's bare-name pass-through form (a line with just
+# GH_TOKEN), which a shell reads as a command -- "GH_TOKEN: command not found".
+# Nothing here needs it anyway; every value below comes from the unit env file,
+# and the container still receives .env through --env-file further down.
+set -a; . "$WT_ENV"; set +a
 podman image exists "$CLAUDE_IMAGE" || die "$CLAUDE_IMAGE is not built. Run: mise run build claude"
 
 # Best-effort, like the unit's Wants=.
