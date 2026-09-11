@@ -21,7 +21,13 @@ After=@@P@@-traefik.service
 # podman socket, so it cannot start playwright itself. Wants= rather than
 # Requires= so a playwright failure does not take the dev server down.
 Wants=@@P@@-playwright@%i.service
-After=@@P@@-playwright@%i.service
+# And nvim, for the same reason of parity: compose gave the nvim service no
+# profile, so `docker compose up` started it and `mise run nvim` could always
+# attach. Nothing pulled it in here, so the unit existed but never ran and the
+# attach failed on a refused connection. Wants=, so a broken editor server
+# never takes the dev server with it.
+Wants=@@P@@-nvim@%i.service
+After=@@P@@-playwright@%i.service @@P@@-nvim@%i.service
 
 [Container]
 # Shared tag keyed by runtime versions, so one image serves every worktree on

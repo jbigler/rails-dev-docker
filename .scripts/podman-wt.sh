@@ -26,10 +26,14 @@ WT_SHARE_ENV="$ROOT/.unit-env/$W.share.env"
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 unit() { printf '%s-%s@%s.service' "$P" "$1" "$W"; }
 
-# Everything that belongs to this worktree, in start order. playwright and
-# claude are deliberately absent: they are started on demand only.
+# Everything that belongs to this worktree. CORE is start order; ALL is
+# teardown order, so stop and down reach every unit including the ones `up`
+# does not start directly. nvim and playwright are here but not in CORE: rails@
+# Wants= them, so starting rails brings them up, and stop has to take them
+# down again. No claude entry -- claude is a one-off container from
+# podman-claude.sh, not a unit.
 CORE=(net-network db redis rustfs-init rustfs rails)
-ALL=(rails rustfs rustfs-init redis db playwright claude net-network)
+ALL=(rails nvim rustfs rustfs-init redis db playwright net-network)
 
 require_units() {
   systemctl --user cat "$(unit rails)" >/dev/null 2>&1 \
