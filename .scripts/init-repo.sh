@@ -74,6 +74,12 @@ fi
 # Pre-create node_modules as the volume's mount point (see create-worktree.sh)
 mkdir -p "${clone_dir}/node_modules"
 
+# Seed the container home, exactly as create-worktree.sh does for every other
+# worktree. Without it the first `up` on a fresh workspace dies on
+# "statfs <root>/.home/<slug>: no such file or directory" -- podman does not
+# create a missing bind-mount source the way the Docker daemon did.
+"$(dirname "$0")/seed-home.sh" "${branch_slug}"
+
 echo ""
 echo "Repo initialized"
 echo "  Repository:      ${clone_url}"
@@ -82,12 +88,14 @@ echo "  Worktree ID:     0"
 echo "  App URL:         http://${branch_slug}.localhost"
 echo "  RustFS API URL:  http://s3.${branch_slug}.localhost"
 echo "  RustFS UI URL:   http://s3-ui.${branch_slug}.localhost"
-echo "  Neovim port:     7000"
+echo "  Neovim port:     17000"
+echo "  Ruby debug port: 33000"
 echo ""
 echo "Next, from inside ${clone_dir}:"
 echo "  mise trust -y && mise install"
-echo "  mise run build      # generates the unit env file, then builds"
+echo "  mise run doctor         # podman >= 5, socket, :80 sysctl, linger"
+echo "  mise run units:install  # render the systemd units; up cannot start without them"
+echo "  mise run build          # writes the unit env file, then builds the images"
 echo "  mise run up"
-echo "  Ruby debug port: 33000"
 echo ""
 echo "cd ${clone_dir} to get started"
