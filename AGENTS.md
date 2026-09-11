@@ -165,7 +165,15 @@ checks it and `mise run allow-ports` lowers it.
   test:rails(tr)/test:rails_watcher(trw, retest)/test:rails_system(trs) forward args to bin/rails;  
   test:javascript(tj)/test:javascript_watcher(tjw) forward args to npx vitest (Vitest + jsdom, no DB, so no depends=up).  
   All go through `podman-wt.sh exec`.
-- nvim(v), claude(ai)/claude:newterm(ai:newterm)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:*,
+- nvim(v) attaches to the nvim server; its config comes from
+  <prefix>_nvim_config, a writable named volume shared by every worktree, so you
+  configure nvim from inside the container once. Set NVIM_CONFIG_DIR in the
+  workspace-root mise.local.toml to bind a host config read-only instead --
+  units-env.sh turns that choice into NVIM_CONFIG_MOUNT (the whole mount spec,
+  because the two cases differ in source and flags and Quadlet cannot branch)
+  plus NVIM_CONFIG_SOURCE, which the entrypoint reports. Plugins are a separate
+  volume, <prefix>_nvim_share.
+- claude(ai)/claude:newterm(ai:newterm)/claude:rebuild, db:dump/db:dump:clear, tags, proxy:*,
   clean. db:dump writes .container-config/db-dumps/, which is also the restore path: db@'s initdb hook
   restores <dbname>.dump on a first start against an empty volume and rustfs-init@ untars
   rustfs_data.tar.gz. clean removes artifacts of worktrees that no longer exist, plus image tags no live

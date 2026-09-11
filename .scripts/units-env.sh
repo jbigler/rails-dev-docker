@@ -43,7 +43,7 @@ REQUIRED=(
   WORKTREE_ID WORKTREE_HOST S3_HOST RUSTFS_UI_HOST
   DB_PORT RUBY_DEBUG_PORT NVIM_PORT PLAYWRIGHT_HOST_PORT APP_PORT S3_PORT
   GEM_VOLUME MAIN_WORKTREE_PATH RUBY_VERSION NODE_VERSION
-  SSH_PATH SSH_AGENT_SOCK NVIM_CONFIG_DIR
+  SSH_PATH SSH_AGENT_SOCK
   CPUS_25 CPUS_50 CPUS_75 PGPASSWORD
 )
 missing=()
@@ -56,6 +56,36 @@ if (( ${#missing[@]} )); then
   printf '\nIs mise.local.toml present in this worktree? It is rendered by\n' >&2
   printf 'create-worktree.sh from .mise/local.toml.template.\n' >&2
   exit 1
+fi
+
+# nvim's config mount, decided here because Quadlet cannot branch.
+#
+# Default (NVIM_CONFIG_DIR unset): a named volume shared by every worktree's
+# nvim container, mounted writable. nvim is then configured normally from inside
+# -- :U chowns the volume to the container user on first use, so lazy.nvim and
+# friends can write -- and the config survives wt:rm, which only removes
+# volumes carrying a worktree slug.
+#
+# Opt-in (NVIM_CONFIG_DIR set): that host directory, read-only. Use it to run
+# your desktop config unchanged; nvim cannot then write to it, so a plugin
+# manager that wants to edit a lockfile will complain.
+nvim_config_mount="${PROJECT_PREFIX}_nvim_config:/home/appuser/.config/nvim:U"
+nvim_config_source=volume
+if [[ -n "${NVIM_CONFIG_DIR:-}" ]]; then
+  if [[ ! -d "$NVIM_CONFIG_DIR" ]]; then
+    printf 'error: NVIM_CONFIG_DIR=%s is set but is not a directory.\n' "$NVIM_CONFIG_DIR" >&2
+    printf '  podman refuses a missing bind source, so nvim@ would fail to start.\n' >&2
+    printf '  Fix the path in mise.local.toml, or unset it to use the shared volume.\n' >&2
+    exit 1
+  fi
+  # systemd splits ExecStart on whitespace and Quadlet emits this unquoted, so a
+  # path containing a space would become two arguments.
+  case "$NVIM_CONFIG_DIR" in
+    *[[:space:]]*) printf 'error: NVIM_CONFIG_DIR contains whitespace, which cannot survive
+  systemd argument splitting: %s\n' "$NVIM_CONFIG_DIR" >&2; exit 1 ;;
+  esac
+  nvim_config_mount="${NVIM_CONFIG_DIR}:/home/appuser/.config/nvim:ro,z"
+  nvim_config_source=host
 fi
 
 # Empty PLAYWRIGHT_VERSION means Gemfile.lock could not be parsed; fall back to
@@ -117,17 +147,12 @@ fi
   printf '\n'
   printf 'GEM_VOLUME=%s\n'            "$GEM_VOLUME"
   printf 'MAIN_WORKTREE_PATH=%s\n'    "$MAIN_WORKTREE_PATH"
-  # Warned about here, where you can see it, rather than left to fail the unit.
-  # podman refuses a missing bind source, and rails@ only Wants= nvim@, so a
-  # host without ~/.config/nvim gets a dead editor and a successful `up` --
-  # a silent failure by construction.
-  [[ -d "$NVIM_CONFIG_DIR" ]] || {
-    printf 'warn: NVIM_CONFIG_DIR=%s does not exist on the host.\n' "$NVIM_CONFIG_DIR" >&2
-    printf '      nvim@ will fail to start ("statfs: no such file or directory").\n' >&2
-    printf '      Point NVIM_CONFIG_DIR at your config in mise.local.toml, or\n' >&2
-    printf '      ignore this if you do not use the nvim container.\n' >&2
-  }
-  printf 'NVIM_CONFIG_DIR=%s\n'       "$NVIM_CONFIG_DIR"
+  printf 'NVIM_CONFIG_MOUNT=%s\n'     "$nvim_config_mount"
+  # Told to the container rather than inferred there. The entrypoint used to
+  # test writability to guess the mode, which is wrong for root (mode bits are
+  # advisory) and fragile in general -- the script that made the decision is the
+  # one that knows.
+  printf 'NVIM_CONFIG_SOURCE=%s\n'    "$nvim_config_source"
   printf 'SSH_PATH=%s\n'              "$SSH_PATH"
   # Validated, not just passed through. mise already falls back to /dev/null
   # when $SSH_AUTH_SOCK is unset, but a *stale* value -- an agent that died, or

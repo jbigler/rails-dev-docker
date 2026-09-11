@@ -25,7 +25,15 @@ PublishPort=127.0.0.1:${NVIM_PORT}:7777
 Volume=@@ROOT@@/.home/%i:/home/appuser:z
 Volume=@@ROOT@@/%i:/app:z
 Volume=${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:z
-Volume=${NVIM_CONFIG_DIR}:/home/appuser/.config/nvim:ro,z
+# The whole mount spec is one variable, because the two cases differ in source
+# AND in flags and Quadlet has no conditional syntax. units-env.sh picks:
+#   unset NVIM_CONFIG_DIR -> <prefix>_nvim_config:...:U  a writable named volume
+#                            shared by every worktree's nvim, so you configure
+#                            nvim from inside the container and it persists
+#   set   NVIM_CONFIG_DIR -> /host/path:...:ro,z          your host config, read-only
+# Quadlet passes an unresolved Volume= through to `podman run -v` verbatim
+# (verified against the generator), and systemd expands it at start.
+Volume=${NVIM_CONFIG_MOUNT}
 Volume=${SSH_PATH}:/home/appuser/.ssh:ro,z
 # Host ssh-agent. Sockets cross the keep-id boundary correctly -- verified
 # with both a named volume and a host bind mount -- so the already-unlocked

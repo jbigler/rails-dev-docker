@@ -38,6 +38,12 @@ cat > "$CONF" <<EOF
 PROJECT_PREFIX = "$name"
 GEM_VOLUME_BASE = "${name}_shared_gems"
 
+# --- nvim config -------------------------------------------------------
+# Uncomment to bind your host Neovim config into the nvim containers
+# read-only. Leave it out and they share a writable named volume instead,
+# which you configure from inside the container.
+# NVIM_CONFIG_DIR = "$HOME/.config/nvim"
+
 # --- podman proxy network (see .scripts/quadlet.sh) ---------------------
 # Uncomment and change these only if 10.214.0.0/24 is already taken on this
 # machine -- netavark refuses a subnet already in use, and the failure surfaces

@@ -24,7 +24,11 @@ SSH_AGENT_SOCK = "{{ env.SSH_AUTH_SOCK | default(value='/dev/null') }}"
 PODMAN_PROXY_SUBNET = "{{env.PODMAN_PROXY_SUBNET | default(value='10.214.0.0/24')}}"
 PODMAN_PROXY_IP_RANGE = "{{env.PODMAN_PROXY_IP_RANGE | default(value='10.214.0.128/25')}}"
 PODMAN_TRAEFIK_IP = "{{env.PODMAN_TRAEFIK_IP | default(value='10.214.0.2')}}"
-NVIM_CONFIG_DIR = "{{ env.NVIM_CONFIG_DIR | default(value = env.HOME ~ '/.config/nvim') }}"
+# Deliberately no default. Unset means nvim@ gets a writable named volume
+# shared across worktrees, configured from inside the container. Set it (in
+# the workspace-root mise.local.toml) to bind your host config in read-only
+# instead -- units-env.sh turns the choice into NVIM_CONFIG_MOUNT.
+#NVIM_CONFIG_DIR = "~/.config/nvim"
 # Light/dark mode for the nvim container, read by the Neovim config at startup.
 # The container's `nvim --headless --listen` server has no UI attached when it
 # starts, so Neovim's builtin OSC 11 background detection is skipped and it would
