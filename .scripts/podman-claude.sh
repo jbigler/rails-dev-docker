@@ -24,7 +24,7 @@ ROOT="$(find_project_root)"
 P="$PROJECT_PREFIX"
 W="$CURRENT_WORKTREE_NAME"
 WT_DIR="$ROOT/$W"
-WT_ENV="$ROOT/.units/$W.env"
+WT_ENV="$ROOT/.unit-env/$W.env"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 

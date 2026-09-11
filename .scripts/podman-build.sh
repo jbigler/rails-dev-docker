@@ -23,7 +23,7 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
 # The env file lives in the wrapper, not the worktree: a worktree is a checkout
 # of the app repo, and this file holds POSTGRES_PASSWORD.
-WT_ENV="$ROOT/.units/$CURRENT_WORKTREE_NAME.env"
+WT_ENV="$ROOT/.unit-env/$CURRENT_WORKTREE_NAME.env"
 
 [[ -d "$WT_DIR" ]] || die "no worktree directory at $WT_DIR"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Write .units/<worktree>.env, the per-worktree values the Quadlet templates read.
+# Write .unit-env/<worktree>.env, the per-worktree values the Quadlet templates read.
 #
 # Quadlet does not expand shell variables in unit keys, but systemd DOES expand
 # ${VAR} in the generated ExecStart from an EnvironmentFile=. So everything that
@@ -30,10 +30,18 @@ WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
 # Deliberately NOT inside the worktree. A worktree is a checkout of the *app*
 # repo, whose .gitignore this repo does not control, so a file there is one
 # `git add -A` away from being committed -- and this one holds POSTGRES_PASSWORD.
-# Under $ROOT/.units/ it sits in the wrapper, which ignores everything by
+# Under $ROOT/.unit-env/ it sits in the wrapper, which ignores everything by
 # default, and one directory holds every worktree's file.
-mkdir -p "$ROOT/.units"
-OUT="$ROOT/.units/$CURRENT_WORKTREE_NAME.env"
+# One-time migration from the directory's first name. It is generated and
+# git-ignored, so moving it is safe and cheaper than leaving a stale copy that
+# nothing reads -- .units/ read like it held systemd units, which live in
+# ~/.config/containers/systemd instead.
+if [[ -d "$ROOT/.units" && ! -d "$ROOT/.unit-env" ]]; then
+  mv "$ROOT/.units" "$ROOT/.unit-env"
+  printf 'Renamed %s/.units to .unit-env\n' "$ROOT" >&2
+fi
+mkdir -p "$ROOT/.unit-env"
+OUT="$ROOT/.unit-env/$CURRENT_WORKTREE_NAME.env"
 
 # An unset variable expands to an empty string in ExecStart, and podman then
 # does something quietly wrong rather than failing -- `--publish 127.0.0.1::5432`
@@ -90,7 +98,7 @@ fi
   # value under the name that script expects.
   printf 'TRAEFIK_IP=%s\n'           "${PODMAN_TRAEFIK_IP:-10.214.0.2}"
   # rails@ interpolates this into a --add-host. wt:share overwrites it in
-  # .units/<wt>.share.env with the tailnet name; the default here is a
+  # .unit-env/<wt>.share.env with the tailnet name; the default here is a
   # duplicate of an entry rails already has, because an empty --add-host is a
   # hard error and Quadlet offers no way to omit an argument conditionally.
   printf 'TS_HOST_ENTRY=%s:%s\n'     "$WORKTREE_HOST" "${PODMAN_TRAEFIK_IP:-10.214.0.2}"
@@ -157,7 +165,7 @@ fi
 # RUSTFS_ENDPOINT without touching generated values. It has to exist even when
 # nothing is shared: podman's --env-file errors on a missing path, and Quadlet's
 # [Container] EnvironmentFile has no `-` optional form the way systemd's does.
-SHARE="$ROOT/.units/$CURRENT_WORKTREE_NAME.share.env"
+SHARE="$ROOT/.unit-env/$CURRENT_WORKTREE_NAME.share.env"
 [[ -f "$SHARE" ]] || printf '# Written by wt:share. Empty means not shared.\n' > "$SHARE"
 
 printf 'Wrote %s\n' "$OUT"

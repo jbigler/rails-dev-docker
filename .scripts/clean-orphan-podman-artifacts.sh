@@ -136,7 +136,7 @@ unknown=""
 for d in "$root"/*/; do
   wt="$(basename "$d")"
   [ -d "$root/$wt/.git" ] || [ -f "$root/$wt/.git" ] || continue
-  env_file="$root/.units/$wt.env"
+  env_file="$root/.unit-env/$wt.env"
   if [ ! -f "$env_file" ]; then
     unknown="${unknown} ${wt}"
     continue

@@ -13,7 +13,7 @@ NetworkAlias=rustfs
 Network=@@P@@-proxy.network
 # Loopback only; see rails@ for why wt:share needs a published port.
 PublishPort=127.0.0.1:${S3_PORT}:9000
-EnvironmentFile=@@ROOT@@/.units/%i.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
 Environment=RUSTFS_VOLUMES=/data/rustfs{0..3}
 Environment=RUSTFS_ACCESS_KEY=rustfsadmin
 Environment=RUSTFS_SECRET_KEY=rustfsadmin
@@ -53,6 +53,6 @@ LogOpt=max-size=20m
 # expanded by systemd from the service environment, so the same file has to be
 # loaded here too. Both lines are needed and neither is redundant: this one
 # resolves the unit's own keys, the [Container] one gives the process its env.
-EnvironmentFile=@@ROOT@@/.units/%i.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
 Restart=on-failure
 RestartSec=5

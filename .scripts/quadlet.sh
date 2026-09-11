@@ -156,7 +156,7 @@ lint_env_expansion() {
   [[ -n "$all" ]] || return 0
   printf '\nerror: the templates above would expand ${VAR} to an empty string.\n' >&2
   printf 'Add to the [Service] section of each:\n' >&2
-  printf '  EnvironmentFile=@@ROOT@@/.units/%%i.env\n' >&2
+  printf '  EnvironmentFile=@@ROOT@@/.unit-env/%%i.env\n' >&2
   return 1
 }
 

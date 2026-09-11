@@ -15,7 +15,7 @@ UserNS=keep-id:uid=1000,gid=1000
 User=1000:1000
 
 EnvironmentFile=@@ROOT@@/.container-config/.env
-EnvironmentFile=@@ROOT@@/.units/%i.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
 Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock
 Environment=RUSTFS_ENDPOINT=http://rustfs:9000
 
@@ -59,6 +59,6 @@ Exec=/usr/local/bin/nvim --headless --listen 0.0.0.0:7777
 # expanded by systemd from the service environment, so the same file has to be
 # loaded here too. Both lines are needed and neither is redundant: this one
 # resolves the unit's own keys, the [Container] one gives the process its env.
-EnvironmentFile=@@ROOT@@/.units/%i.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
 Restart=on-failure
 RestartSec=5

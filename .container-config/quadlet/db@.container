@@ -16,7 +16,7 @@ NetworkAlias=db
 # app containers and sets PGHOST=db, which breaks the initdb.d scripts (during
 # first-start init the server listens on its local socket only, so createdb and
 # psql get "Connection refused"). Everything db needs is explicit.
-EnvironmentFile=@@ROOT@@/.units/%i.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
 # Match the app containers so timestamps agree across the stack.
 Environment=TZ=Asia/Bangkok
 Environment=PGTZ=Asia/Bangkok
@@ -83,6 +83,6 @@ LogOpt=max-size=20m
 # expanded by systemd from the service environment, so the same file has to be
 # loaded here too. Both lines are needed and neither is redundant: this one
 # resolves the unit's own keys, the [Container] one gives the process its env.
-EnvironmentFile=@@ROOT@@/.units/%i.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
 Restart=on-failure
 RestartSec=5

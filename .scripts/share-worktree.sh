@@ -25,8 +25,8 @@ action="${1:-on}"
 : "${CURRENT_WORKTREE_NAME:?CURRENT_WORKTREE_NAME unset (mise env not loaded)}"
 P="$PROJECT_PREFIX"
 W="$CURRENT_WORKTREE_NAME"
-WT_ENV="$ROOT/.units/$W.env"
-SHARE_ENV="$ROOT/.units/$W.share.env"
+WT_ENV="$ROOT/.unit-env/$W.env"
+SHARE_ENV="$ROOT/.unit-env/$W.share.env"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
@@ -66,7 +66,7 @@ case "$action" in
     # DOMAIN drives default_url_options and config.hosts; DEV_HOSTS keeps the
     # desktop's http://<slug>.localhost working while shared; TS_HOST_ENTRY
     # becomes rails@'s extra --add-host so rails can reach its own signing
-    # endpoint server-side. These override .units/<wt>.env, which rails@ loads
+    # endpoint server-side. These override .unit-env/<wt>.env, which rails@ loads
     # first -- podman joins --env over the earlier --env-file, and systemd's
     # last EnvironmentFile wins the same way.
     cat > "$SHARE_ENV" <<EOF

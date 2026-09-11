@@ -20,8 +20,8 @@ W="$CURRENT_WORKTREE_NAME"
 WT_DIR="$ROOT/$W"
 # The env file lives in the wrapper, not the worktree: a worktree is a checkout
 # of the app repo, and this file holds POSTGRES_PASSWORD.
-WT_ENV="$ROOT/.units/$W.env"
-WT_SHARE_ENV="$ROOT/.units/$W.share.env"
+WT_ENV="$ROOT/.unit-env/$W.env"
+WT_SHARE_ENV="$ROOT/.unit-env/$W.share.env"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 unit() { printf '%s-%s@%s.service' "$P" "$1" "$W"; }

@@ -147,7 +147,7 @@ fi
 
 # The unit env file lives in the workspace root, not the worktree, so removing
 # the worktree directory does not take it with it.
-rm -f "${root}/.units/${clean_name}.env" "${root}/.units/${clean_name}.share.env"
+rm -f "${root}/.unit-env/${clean_name}.env" "${root}/.unit-env/${clean_name}.share.env"
 
 # Drop the dashboard's claude status file for this worktree
 rm -f "${root}/.container-config/status/${clean_name}.json"
