@@ -58,7 +58,7 @@ cd ~/code/rails-dev/<base-name> && mise trust && mise install && mise run up
 Notes:
 
 - **Per-worktree files:** list untracked files (e.g. `.env.local`, `config/master.key`) in
-  `.docker-config/worktree-seed.txt`; each new worktree gets its own copy from the base worktree.
+  `.container-config/worktree-seed.txt`; each new worktree gets its own copy from the base worktree.
 - **Symlinked nvim configs:** if your `~/.config/nvim` contains symlinks (e.g. into a dotfiles repo),
   set `NVIM_CONFIG_DIR` in `mise.local.toml` to the real directory so the in-container mount doesn't
   dangle.
@@ -102,7 +102,7 @@ _Tip: Set a shell alias for "mise run" to "mr"._
 
 ### Database / RustFS snapshots
 
-- `mise run db:dump` — dump dev DB and RustFS data into `.docker-config/db-dumps/` for fast container restarts
+- `mise run db:dump` — dump dev DB and RustFS data into `.container-config/db-dumps/` for fast container restarts
 - `mise run db:dump:clear` — remove dump files so the next start does a full `db:prepare`
 
 ### Host-side Rails DB commands

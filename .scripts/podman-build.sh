@@ -13,7 +13,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 ROOT="$(find_project_root)"
-CTX="$ROOT/.docker-config"
+CTX="$ROOT/.container-config"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
@@ -36,7 +36,7 @@ fi
 set -a; . "$WT_ENV"; set +a
 
 for v in RAILS_IMAGE NVIM_IMAGE CLAUDE_IMAGE PLAYWRIGHT_IMAGE RUBY_VERSION NODE_VERSION PLAYWRIGHT_VERSION; do
-  [[ -n "${!v:-}" ]] || die "$v missing from $WT_ENV -- regenerate it: mise run podman:env"
+  [[ -n "${!v:-}" ]] || die "$v missing from $WT_ENV -- regenerate it: mise run units:env"
 done
 
 PULL=()

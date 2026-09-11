@@ -12,7 +12,7 @@ ContainerName=@@P@@-%i-db
 Network=@@P@@-%i-dev
 NetworkAlias=db
 
-# Deliberately NOT the shared .docker-config/.env: that file is written for the
+# Deliberately NOT the shared .container-config/.env: that file is written for the
 # app containers and sets PGHOST=db, which breaks the initdb.d scripts (during
 # first-start init the server listens on its local socket only, so createdb and
 # psql get "Connection refused"). Everything db needs is explicit.
@@ -32,8 +32,8 @@ ShmSize=256mb
 PublishPort=127.0.0.1:${DB_PORT}:5432
 
 Volume=@@P@@-%i-db-data:/var/lib/postgresql/data
-Volume=@@ROOT@@/.docker-config/initdb/restore-dump.sh:/docker-entrypoint-initdb.d/restore-dump.sh:ro,z
-Volume=@@ROOT@@/.docker-config/db-dumps:/db-dumps:ro,z
+Volume=@@ROOT@@/.container-config/initdb/restore-dump.sh:/docker-entrypoint-initdb.d/restore-dump.sh:ro,z
+Volume=@@ROOT@@/.container-config/db-dumps:/db-dumps:ro,z
 
 # No UserNS=keep-id: this image runs as its own postgres user against a
 # podman-managed named volume, where the default rootless mapping is correct.

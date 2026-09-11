@@ -6,19 +6,24 @@ GEM_VOLUME_BASE = "{{env.GEM_VOLUME_BASE | default(value='default_shared_gems')}
 SSH_PATH = "{{ env.SSH_PATH | default(value = env.HOME ~ '/.ssh') }}"
 # Host ssh-agent socket bind-mounted into the nvim/claude containers, so git
 # over SSH uses the already-unlocked host key instead of prompting for the
-# passphrase every time. Linux: the host's own $SSH_AUTH_SOCK. macOS: the host
-# socket can't cross the Docker Desktop VM boundary, so Docker Desktop exposes
-# the host agent inside the VM at the fixed path /run/host-services/ssh-auth.sock
-# (keys must be in the host agent: ssh-add --apple-use-keychain ~/.ssh/id_rsa).
+# passphrase every time. Rootless podman maps the host user onto uid 1000 in
+# the container (keep-id), so the socket's ownership works as-is.
 # Falls back to /dev/null when no agent is running — mounting that keeps the
-# containers startable (ssh just reports no agent) instead of failing the whole
-# `docker compose up` on an empty mount source.
-SSH_AGENT_SOCK = "{% if os() == 'macos' %}/run/host-services/ssh-auth.sock{% else %}{{ env.SSH_AUTH_SOCK | default(value='/dev/null') }}{% endif %}"
-# Proxy network subnet and Traefik's static IP on it (worktree extra_hosts
-# target). Override both in mise.local.toml when running multiple
-# PROJECT_PREFIX workspaces, or the second proxy network will fail to create.
-PROXY_SUBNET = "{{env.PROXY_SUBNET | default(value='10.213.0.0/24')}}"
-TRAEFIK_IP = "{{env.TRAEFIK_IP | default(value='10.213.0.2')}}"
+# containers startable (ssh just reports no agent) rather than failing the unit,
+# which podman does outright on a bind source that is not there. units:env
+# re-checks the path at generation time, because a *stale* $SSH_AUTH_SOCK points
+# at a socket that no longer exists and would fail the same way.
+# Linux only: the old macOS value was a Docker Desktop VM path.
+SSH_AGENT_SOCK = "{{ env.SSH_AUTH_SOCK | default(value='/dev/null') }}"
+# Proxy network subnet and Traefik's static IP on it (the worktree --add-host
+# target). Override in mise.local.toml when running multiple PROJECT_PREFIX
+# workspaces, or the second proxy network fails to create -- netavark refuses a
+# subnet already in use on the host. These are the PODMAN_ names quadlet.sh
+# actually reads; the old PROXY_SUBNET/TRAEFIK_IP pair was left behind by the
+# conversion and silently ignored.
+PODMAN_PROXY_SUBNET = "{{env.PODMAN_PROXY_SUBNET | default(value='10.214.0.0/24')}}"
+PODMAN_PROXY_IP_RANGE = "{{env.PODMAN_PROXY_IP_RANGE | default(value='10.214.0.128/25')}}"
+PODMAN_TRAEFIK_IP = "{{env.PODMAN_TRAEFIK_IP | default(value='10.214.0.2')}}"
 NVIM_CONFIG_DIR = "{{ env.NVIM_CONFIG_DIR | default(value = env.HOME ~ '/.config/nvim') }}"
 # Light/dark mode for the nvim container, read by the Neovim config at startup.
 # The container's `nvim --headless --listen` server has no UI attached when it
@@ -26,7 +31,7 @@ NVIM_CONFIG_DIR = "{{ env.NVIM_CONFIG_DIR | default(value = env.HOME ~ '/.config
 # otherwise always come up dark. Detected from the host terminal instead; set
 # NVIM_BACKGROUND in the environment or mise.local.toml to override.
 NVIM_BACKGROUND = "{{ exec(command = config_root ~ '/.scripts/detect-terminal-background.sh') }}"
-# CPU limits for the compose services (deploy.resources), as a percentage of
+# CPU limits for the containers (PodmanArgs=--cpus in the unit templates), as a percentage of
 # this machine's cores instead of hardcoded counts — see .scripts/cpu-share.sh.
 # Several worktree stacks can be up at once, so no service gets the whole host;
 # override these in mise.local.toml to change the split.
@@ -282,7 +287,7 @@ description = "Check the rootless podman prerequisites: version, socket, privile
 run = "{{config_root}}/.scripts/quadlet.sh doctor"
 
 [tasks."units:install"]
-description = "Render .docker-config/quadlet/ into ~/.config/containers/systemd and reload systemd."
+description = "Render .container-config/quadlet/ into ~/.config/containers/systemd and reload systemd."
 run = "{{config_root}}/.scripts/quadlet.sh install"
 
 [tasks."units:uninstall"]
@@ -290,7 +295,7 @@ description = "Remove the rendered Quadlet units and reload systemd."
 run = "{{config_root}}/.scripts/quadlet.sh uninstall"
 
 [tasks."verify:spike"]
-description = "Prove Traefik-on-podman discovers and routes to a podman container. Throwaway; needs podman:install first."
+description = "Prove Traefik-on-podman discovers and routes to a podman container. Throwaway; needs units:install first."
 run = "{{config_root}}/.scripts/quadlet.sh spike"
 
 [tasks.allow-ports]
@@ -314,7 +319,7 @@ description = "Restart the podman proxy stack, recreating its containers."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-restart"
 
 [tasks."proxy:logs"]
-description = "Follow a proxy service's journal (default traefik; e.g. `mise run podman:proxy:logs dozzle`)."
+description = "Follow a proxy service's journal (default traefik; e.g. `mise run proxy:logs dozzle`)."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-logs"
 
 [tasks."proxy:pull"]
@@ -359,7 +364,7 @@ description = "Show this worktree's unit and container state plus its URLs. Run 
 run = "{{config_root}}/.scripts/podman-wt.sh status"
 
 [tasks.logs]
-description = "Follow a service's journal for this worktree (default rails; e.g. `mise run podman:logs db`). Run from a worktree."
+description = "Follow a service's journal for this worktree (default rails; e.g. `mise run logs db`). Run from a worktree."
 run = "{{config_root}}/.scripts/podman-wt.sh logs"
 
 [tasks.exec]
@@ -384,7 +389,7 @@ run = "{{config_root}}/.scripts/init-repo.sh"
 description = "Show the proxy stack's unit and container state plus its URLs."
 run = "{{config_root}}/.scripts/quadlet.sh proxy-status"
 [tasks."db:dump"]
-description = "Dump this worktree's development database and RustFS objects into .docker-config/db-dumps/. They restore automatically on the next up against an empty db volume. Run from a worktree."
+description = "Dump this worktree's development database and RustFS objects into .container-config/db-dumps/. They restore automatically on the next up against an empty db volume. Run from a worktree."
 run = "{{config_root}}/.scripts/podman-db-dump.sh"
 
 [tasks."db:dump:clear"]

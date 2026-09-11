@@ -20,8 +20,7 @@ APP_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 13000 + id }}"
 S3_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 19000 + id }}"
 RUSTFS_ENDPOINT = "http://{{ env.S3_HOST }}"
 
-# Host → container Postgres over TCP (the bind-mounted UNIX socket does not work
-# across the macOS Docker Desktop VM boundary). DB_PORT is published per worktree
+# Host → container Postgres over TCP. DB_PORT is published per worktree
 # by the db service; these PG* vars are host-shell only and never enter the
 # container (the app service has no PG* passthrough), so `bin/rails`, `psql`, etc.
 # run on the host resolve to this worktree's containerized Postgres. RAILS_ENV
@@ -39,14 +38,14 @@ PGPASSWORD = "password"
 DEV_DB_NAME = "{{ exec(command='../.scripts/dev-db-name.sh config/database.yml') | trim }}"
 # Playwright version pinned by this worktree's Gemfile.lock (playwright-ruby-client
 # tracks upstream Playwright). Drives the browser-server image tag and the npm
-# playwright-core version; empty when unresolvable → compose falls back to its
-# default tag (and `mise run up` warns).
+# playwright-core version; empty when unresolvable → units:env falls back to a
+# default tag and warns.
 PLAYWRIGHT_VERSION = "{{ exec(command='../.scripts/playwright-version.sh Gemfile.lock') | trim }}"
 # Host → containerized Playwright browser server (published per worktree by the
 # playwright service), so system tests run ON THE HOST connect to this worktree's
 # in-container browser. APP_HOST is how that browser navigates back to the
-# Capybara test server running on the host (Docker Desktop host alias).
-# These are host-shell only — inside the containers, .docker-config/.env wins.
+# Capybara test server running on the host.
+# These are host-shell only — inside the containers, .container-config/.env wins.
 PLAYWRIGHT_HOST_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 18888 + id }}"
 PLAYWRIGHT_HOST = "ws://localhost:{{ env.PLAYWRIGHT_HOST_PORT }}/connect"
 # podman writes both host.containers.internal and host.docker.internal into

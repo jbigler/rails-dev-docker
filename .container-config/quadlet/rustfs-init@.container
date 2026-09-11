@@ -11,14 +11,13 @@ Image=docker.io/library/alpine
 ContainerName=@@P@@-%i-rustfs-init
 Network=@@P@@-%i-dev
 Volume=@@P@@-%i-rustfs-data:/data
-Volume=@@ROOT@@/.docker-config/db-dumps:/db-dumps:ro,z
+Volume=@@ROOT@@/.container-config/db-dumps:/db-dumps:ro,z
 Exec=sh -c 'if [ -f /db-dumps/rustfs_data.tar.gz ] && [ ! -d /data/rustfs0 ]; then echo "rustfs-init: Restoring RustFS data from backup..."; tar xzf /db-dumps/rustfs_data.tar.gz -C /data; echo "rustfs-init: Done."; else echo "rustfs-init: No restore needed."; fi'
 
 [Service]
 # Runs to completion, then stays "active" so units ordered After= it see a
-# finished restore. This replaces compose's
-# `condition: service_completed_successfully`, and is a stronger guarantee:
-# podman-compose translates that condition to --requires, which orders startup
-# but does not wait for the container to exit.
+# finished restore. This is what replaces compose's
+# `condition: service_completed_successfully`: systemd holds the job until the
+# process exits, so rustfs@ cannot start mid-restore.
 Type=oneshot
 RemainAfterExit=yes

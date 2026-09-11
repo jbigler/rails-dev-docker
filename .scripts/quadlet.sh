@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Render the Quadlet unit templates in .docker-config/quadlet/ into the user's
+# Render the Quadlet unit templates in .container-config/quadlet/ into the user's
 # systemd config dir, and check the rootless prerequisites.
 #
 # The templates carry @@TOKEN@@ placeholders because Quadlet does no variable
@@ -11,13 +11,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 ROOT="$(find_project_root)"
 
 : "${PROJECT_PREFIX:?PROJECT_PREFIX unset (mise env not loaded)}"
-# Deliberately NOT inherited from PROXY_SUBNET/TRAEFIK_IP. Those describe the
-# Docker proxy network, which holds 10.213.0.0/24 while the compose stack still
-# exists -- and netavark refuses to create a network whose subnet is already
-# used on the host ("subnet ... is already used on the host or by another
-# config", exit 125). The podman proxy therefore gets its own range so both can
-# coexist during the transition. After the Docker proxy is gone you can point
-# these at 10.213.x if you prefer, but there is no reason to.
+# 10.214, not the 10.213 the old compose proxy used. netavark refuses to create
+# a network whose subnet is already in use on the host ("subnet ... is already
+# used on the host or by another config", exit 125), and a machine that ran the
+# docker stack still has 10.213.0.0/24 until its networks are pruned. Separate
+# ranges mean the conversion did not require tearing docker down first. Settable
+# from mise.local.toml -- .mise/config.toml defines all three as env.
 PODMAN_PROXY_SUBNET="${PODMAN_PROXY_SUBNET:-10.214.0.0/24}"
 PODMAN_PROXY_IP_RANGE="${PODMAN_PROXY_IP_RANGE:-10.214.0.128/25}"
 PODMAN_TRAEFIK_IP="${PODMAN_TRAEFIK_IP:-10.214.0.2}"
@@ -96,7 +95,7 @@ lint_templates() {
     [[ -n "$line" ]] || continue
     printf '  %s:%s\n    %s\n' "$(basename "$f")" "$n" "$line" >&2
     bad=1
-  done < <(grep -nHE '^(Label|Environment)=[^"]*[[:space:]]' "$ROOT"/.docker-config/quadlet/* 2>/dev/null \
+  done < <(grep -nHE '^(Label|Environment)=[^"]*[[:space:]]' "$ROOT"/.container-config/quadlet/* 2>/dev/null \
              | sed 's/^\([^:]*\):\([0-9]*\):/\1:\2:/')
   if (( bad )); then
     printf '\nerror: the values above contain spaces but are not quoted.\n' >&2
@@ -125,7 +124,7 @@ lint_templates() {
 # systemd would expand it to nothing. It has to be written $${1}.
 lint_env_expansion() {
   local f out all=""
-  for f in "$ROOT"/.docker-config/quadlet/*.container; do
+  for f in "$ROOT"/.container-config/quadlet/*.container; do
     [[ -e "$f" ]] || continue
     out="$(awk '
       /^\[/ { section = $0; next }
@@ -172,7 +171,7 @@ lint_env_expansion() {
 stale_units() {
   local src b out
   shopt -s nullglob
-  for src in "$ROOT"/.docker-config/quadlet/*; do
+  for src in "$ROOT"/.container-config/quadlet/*; do
     b="$(basename "$src")"
     out="$DEST/${PROJECT_PREFIX}-${b}"
     if [[ ! -f "$out" ]]; then
@@ -187,12 +186,12 @@ cmd_check_stale() {
   local out
   out="$(stale_units)"
   [[ -n "$out" ]] || { printf 'installed units match the templates\n'; return 0; }
-  printf 'These installed units no longer match .docker-config/quadlet/:\n\n' >&2
+  printf 'These installed units no longer match .container-config/quadlet/:\n\n' >&2
   printf '%s\n' "$out" | while IFS=$'\t' read -r name why; do
     printf '  %-40s %s\n' "$name" "$why" >&2
   done
   printf '\nsystemd is still running the old generated units. Re-render them:\n' >&2
-  printf '  mise run podman:install\n' >&2
+  printf '  mise run units:install\n' >&2
   return 1
 }
 
@@ -202,16 +201,16 @@ cmd_install() {
   lint_env_expansion || die "refusing to install templates whose keys cannot expand"
   mkdir -p "$DEST"
   local src b out
-  for src in "$ROOT"/.docker-config/quadlet/*; do
+  for src in "$ROOT"/.container-config/quadlet/*; do
     b="$(basename "$src")"
     out="$DEST/${PROJECT_PREFIX}-${b}"
-    { printf '%s from .docker-config/quadlet/%s -- edit the repo, not this file.\n' "$MARKER" "$b"
+    { printf '%s from .container-config/quadlet/%s -- edit the repo, not this file.\n' "$MARKER" "$b"
       render "$src"; } > "$out"
     printf 'installed %s\n' "$(basename "$out")"
   done
   systemctl --user daemon-reload
   printf '\nInstalled. Now run:\n'
-  printf '  mise run podman:doctor    # confirms the socket and the :80 sysctl\n'
+  printf '  mise run doctor    # confirms the socket and the :80 sysctl\n'
   printf '  systemctl --user start %s-traefik\n' "$PROJECT_PREFIX"
   printf '\nThe network and volumes are created by their own generated units and\n'
   printf 'are pulled in automatically by Requires= -- never create them by hand.\n'
@@ -242,9 +241,9 @@ require_prefix() {
   PROJECT_PREFIX comes from mise.local.toml at the workspace root. If that is
   the wrong value, fix it there rather than reinstalling -- reinstalling would
   add a second set of units and orphan the containers you already have.
-  Otherwise: mise run podman:install"
+  Otherwise: mise run units:install"
   fi
-  die "no units installed at all. Run: mise run podman:install"
+  die "no units installed at all. Run: mise run units:install"
 }
 
 PROXY_UNITS=(traefik dozzle home)
@@ -350,7 +349,7 @@ cmd_doctor() {
   if [[ -n "$drift" ]]; then
     bad "installed units are out of date: $drift
         Re-render them, or every start reports the previous failure:
-            mise run podman:install"
+            mise run units:install"
   else
     ok "installed units match the templates"
   fi
@@ -398,7 +397,7 @@ cmd_doctor() {
     bad "$PODMAN_PROXY_SUBNET is already used by a $holder network, so netavark
         will refuse to create it (exit 125, surfacing as a dependency failure
         for traefik). Pick a free range -- one line, no continuations:
-            PODMAN_PROXY_SUBNET=10.215.0.0/24 PODMAN_PROXY_IP_RANGE=10.215.0.128/25 PODMAN_TRAEFIK_IP=10.215.0.2 mise run podman:install
+            PODMAN_PROXY_SUBNET=10.215.0.0/24 PODMAN_PROXY_IP_RANGE=10.215.0.128/25 PODMAN_TRAEFIK_IP=10.215.0.2 mise run units:install
         Better: set those three in mise.local.toml so every run picks them up."
   else
     ok "$PODMAN_PROXY_SUBNET is free (traefik at $PODMAN_TRAEFIK_IP)"
@@ -412,7 +411,7 @@ cmd_doctor() {
   else
     bad "ip_unprivileged_port_start=$start -- rootless cannot publish :80, so
         http://<slug>.localhost will not resolve. Fix it with:
-            mise run podman:allow-ports
+            mise run allow-ports
         That runs two one-liners, both with sudo as the first word and no pipe:
             sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
             sudo sh -c 'echo net.ipv4.ip_unprivileged_port_start=80 > /etc/sysctl.d/99-rootless-ports.conf'"
@@ -467,10 +466,11 @@ cmd_doctor() {
   return $FAILED
 }
 
-# Prove Traefik-on-podman can discover a podman container before committing to a
-# cutover. The proxy and the worktree stacks CANNOT straddle engines -- Traefik
-# on podman sees nothing on Docker's socket and cannot join a Docker network --
-# so this is a throwaway spike, not a migration step.
+# Prove Traefik discovers a podman container over the compat socket, with a
+# throwaway container rather than a worktree. Written to de-risk the cutover --
+# the proxy and the worktree stacks cannot straddle engines, so there was no way
+# to try it on one worktree first -- and still the quickest way to tell a broken
+# socket or provider config apart from a broken worktree.
 cmd_spike() {
   # Not `local`: the EXIT trap fires after this function's scope is gone, and a
   # single-quoted trap body would expand $name then -- which under `set -u` dies
@@ -485,12 +485,12 @@ cmd_spike() {
   local net_unit="${PROJECT_PREFIX}-proxy-network.service"
   local traefik_unit="${PROJECT_PREFIX}-traefik.service"
   if ! systemctl --user cat "$traefik_unit" >/dev/null 2>&1; then
-    die "$traefik_unit does not exist -- run 'mise run podman:install' first"
+    die "$traefik_unit does not exist -- run 'mise run units:install' first"
   fi
   printf 'starting %s and %s...\n' "$net_unit" "$traefik_unit"
   systemctl --user start "$traefik_unit" || die "could not start $traefik_unit.
   Check: systemctl --user status $traefik_unit
-  A failure to publish :80 means the sysctl is missing -- see podman:doctor."
+  A failure to publish :80 means the sysctl is missing -- see doctor."
 
   if ! podman network exists "${PROJECT_PREFIX}_proxy"; then
     die "network ${PROJECT_PREFIX}_proxy still missing after starting $net_unit.
@@ -560,7 +560,7 @@ cmd_verify() {
   if curl -fsS --max-time 5 "$api/overview" >/dev/null 2>&1; then
     ok "reachable at $api"
   elif (( FAILED )); then
-    bad "unreachable at $api -- start the proxy first: mise run podman:proxy:up"
+    bad "unreachable at $api -- start the proxy first: mise run proxy:up"
     printf '\n'; return 1
   else
     bad "unreachable at $api even though traefik is running. Its API is not

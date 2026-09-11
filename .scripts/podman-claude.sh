@@ -32,7 +32,7 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
                         "$ROOT/.scripts/units-env.sh" >&2; }
 "$ROOT/.scripts/seed-home.sh" "$W" >&2
 
-set -a; . "$ROOT/.docker-config/.env"; . "$WT_ENV"; set +a
+set -a; . "$ROOT/.container-config/.env"; . "$WT_ENV"; set +a
 podman image exists "$CLAUDE_IMAGE" || die "$CLAUDE_IMAGE is not built. Run: mise run build claude"
 
 # Best-effort, like the unit's Wants=.
@@ -61,7 +61,7 @@ gitignore=()
 # claude-memory is one directory shared by every worktree and by host sessions,
 # which symlink to it. Homes are per-worktree and wt:rm deletes them, so memory
 # kept under .home/<slug> would die with the worktree.
-mkdir -p "$ROOT/.docker-config/claude-memory" "$ROOT/.docker-config/status"
+mkdir -p "$ROOT/.container-config/claude-memory" "$ROOT/.container-config/status"
 memdir="$ROOT/.home/$W/.claude/projects/-app-$W"
 mkdir -p "$memdir"
 
@@ -72,7 +72,7 @@ exec podman run --rm -it \
   --cap-add NET_ADMIN --cap-add NET_RAW \
   --cpus="$CPUS_50" \
   --label traefik.enable=false \
-  --env-file "$ROOT/.docker-config/.env" --env-file "$WT_ENV" \
+  --env-file "$ROOT/.container-config/.env" --env-file "$WT_ENV" \
   --env NODE_OPTIONS=--max-old-space-size=4096 \
   --env POWERLEVEL9K_DISABLE_GITSTATUS=true \
   --env SSH_AUTH_SOCK=/tmp/ssh-agent.sock \
@@ -80,12 +80,12 @@ exec podman run --rm -it \
   "${token[@]}" "${agent[@]}" "${gitignore[@]}" \
   -v "$ROOT/.home/$W:/home/appuser:z" \
   -v "$WT_DIR:/app-$W:z" \
-  -v "$ROOT/.docker-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro,z" \
-  -v "$ROOT/.docker-config/claude-memory:/home/appuser/.claude/projects/-app-$W/memory:z" \
-  -v "$ROOT/.docker-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro,z" \
-  -v "$ROOT/.docker-config/init-firewall.sh:/usr/local/bin/init-firewall.sh:ro,z" \
-  -v "$ROOT/.docker-config/claude-status-hook.sh:/usr/local/bin/claude-status-hook.sh:ro,z" \
-  -v "$ROOT/.docker-config/status:/status:z" \
+  -v "$ROOT/.container-config/CLAUDE.md:/opt/claude/CLAUDE.md:ro,z" \
+  -v "$ROOT/.container-config/claude-memory:/home/appuser/.claude/projects/-app-$W/memory:z" \
+  -v "$ROOT/.container-config/entrypoint-claude.sh:/usr/local/bin/entrypoint-claude.sh:ro,z" \
+  -v "$ROOT/.container-config/init-firewall.sh:/usr/local/bin/init-firewall.sh:ro,z" \
+  -v "$ROOT/.container-config/claude-status-hook.sh:/usr/local/bin/claude-status-hook.sh:ro,z" \
+  -v "$ROOT/.container-config/status:/status:z" \
   -v "$MAIN_WORKTREE_PATH/.git:$MAIN_WORKTREE_PATH/.git:z" \
   -v "$SSH_PATH:/home/appuser/.ssh:ro,z" \
   -v "$GEM_VOLUME:/usr/local/bundle" \

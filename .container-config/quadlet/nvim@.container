@@ -14,7 +14,7 @@ NetworkAlias=nvim
 UserNS=keep-id:uid=1000,gid=1000
 User=1000:1000
 
-EnvironmentFile=@@ROOT@@/.docker-config/.env
+EnvironmentFile=@@ROOT@@/.container-config/.env
 EnvironmentFile=@@ROOT@@/.units/%i.env
 Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock
 Environment=RUSTFS_ENDPOINT=http://rustfs:9000
@@ -31,7 +31,7 @@ Volume=${SSH_PATH}:/home/appuser/.ssh:ro,z
 # with both a named volume and a host bind mount -- so the already-unlocked
 # host key is reused instead of prompting per container.
 Volume=${SSH_AGENT_SOCK}:/tmp/ssh-agent.sock:ro,z
-Volume=@@ROOT@@/.docker-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro,z
+Volume=@@ROOT@@/.container-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro,z
 Volume=%h/.config/git/ignore:/home/appuser/.config/git/ignore:ro,z
 # kitty remote control for vim-kitty-navigator: the plugin shells out to
 # `kitten @` from the nvim server in here. The host's kitten links only libc so

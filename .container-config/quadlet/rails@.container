@@ -39,7 +39,7 @@ Network=@@P@@-proxy.network
 UserNS=keep-id:uid=1000,gid=1000
 User=1000:1000
 
-EnvironmentFile=@@ROOT@@/.docker-config/.env
+EnvironmentFile=@@ROOT@@/.container-config/.env
 EnvironmentFile=@@ROOT@@/.units/%i.env
 # Written by wt:share, empty otherwise. Last wins, in both sections.
 EnvironmentFile=@@ROOT@@/.units/%i.share.env
@@ -63,7 +63,7 @@ PublishPort=127.0.0.1:${APP_PORT}:3000
 Volume=@@ROOT@@/%i:/app:z
 Volume=@@ROOT@@/.home/%i:/home/appuser:z
 Volume=${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:ro,z
-Volume=@@ROOT@@/.docker-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro,z
+Volume=@@ROOT@@/.container-config/entrypoint-app.sh:/usr/local/bin/entrypoint-app.sh:ro,z
 # No :U -- /usr/local/bundle is not under a bind mount, so podman's copy-up
 # from the image populates the volume with appuser ownership already.
 Volume=${GEM_VOLUME}:/usr/local/bundle

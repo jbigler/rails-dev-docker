@@ -43,7 +43,7 @@ GEM_VOLUME_BASE = "${name}_shared_gems"
 # network's 10.213.0.0/24. Uncomment and change these only if that range is
 # also taken -- netavark refuses a subnet already in use on the host, and the
 # failure surfaces as a dependency error for traefik rather than naming the
-# subnet. \`mise run podman:doctor\` reports the clash directly.
+# subnet. \`mise run doctor\` reports the clash directly.
 # PODMAN_PROXY_SUBNET = "10.215.0.0/24"
 # PODMAN_PROXY_IP_RANGE = "10.215.0.128/25"
 # PODMAN_TRAEFIK_IP = "10.215.0.2"

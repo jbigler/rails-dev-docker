@@ -7,11 +7,11 @@ After=@@P@@-traefik.service
 Image=docker.io/library/nginx:alpine
 ContainerName=@@P@@-home
 Network=@@P@@-proxy.network
-Volume=@@ROOT@@/.docker-config/proxy/index.html:/usr/share/nginx/html/index.html:ro,z
-Volume=@@ROOT@@/.docker-config/proxy/home-nginx.conf:/etc/nginx/conf.d/default.conf:ro,z
+Volume=@@ROOT@@/.container-config/proxy/index.html:/usr/share/nginx/html/index.html:ro,z
+Volume=@@ROOT@@/.container-config/proxy/home-nginx.conf:/etc/nginx/conf.d/default.conf:ro,z
 # Written by each worktree's claude container (status hook); served at /status/
 # for the dashboard's claude badges.
-Volume=@@ROOT@@/.docker-config/status:/usr/share/nginx/html/status:ro,z
+Volume=@@ROOT@@/.container-config/status:/usr/share/nginx/html/status:ro,z
 LogDriver=k8s-file
 LogOpt=max-size=20m
 Label=traefik.enable=true

@@ -4,21 +4,21 @@
 # Include repo docs
 !/AGENTS.md
 
-# Include the docker-config directory and its contents (except for the
+# Include the container-config directory and its contents (except for the
 # home-template, db-dumps and status directories)
-!/.docker-config/
-/.docker-config/home-template/*
-/.docker-config/home-template/.*
-!/.docker-config/home-template/.gitkeep
+!/.container-config/
+/.container-config/home-template/*
+/.container-config/home-template/.*
+!/.container-config/home-template/.gitkeep
 
 
-/.docker-config/db-dumps/*
-!/.docker-config/db-dumps/.gitkeep
-/.docker-config/status/*
-!/.docker-config/status/.gitkeep
+/.container-config/db-dumps/*
+!/.container-config/db-dumps/.gitkeep
+/.container-config/status/*
+!/.container-config/status/.gitkeep
 
-/.docker-config/claude-memory/*
-!/.docker-config/claude-memory/.gitkeep
+/.container-config/claude-memory/*
+!/.container-config/claude-memory/.gitkeep
 
 # Include the mise files
 !/mise.*

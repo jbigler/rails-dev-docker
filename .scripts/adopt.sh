@@ -7,7 +7,7 @@ set -euo pipefail
 # location so the old path keeps working everywhere.
 #
 # Usage: .scripts/adopt.sh [-p <prefix>] [-b <base-name>] <path-to-existing-checkout>
-#   -p <prefix>     Docker volume/network prefix (default: checkout folder name)
+#   -p <prefix>     podman volume/network prefix (default: checkout folder name)
 #   -b <base-name>  base worktree directory name (default: checkout folder name;
 #                   set to your default branch, e.g. -b master, to match the
 #                   tool's clone-time convention)

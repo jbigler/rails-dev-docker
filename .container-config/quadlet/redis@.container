@@ -13,10 +13,9 @@ Network=@@P@@-%i-dev
 NetworkAlias=redis
 # TCP on the worktree network only, never published to the host.
 Exec=redis-server --loglevel warning --save '' --appendonly no
-# Shell form on purpose: podman-compose mistranslates the exec form
-# (["CMD","redis-cli","ping"]) into /bin/sh -c "redis-cli' 'ping", which exits
-# 127. Quadlet does not have that bug, but keeping the shell form means the
-# check reads the same in both worlds.
+# Shell form. Quadlet passes this to --health-cmd as written, escaping the
+# space as \x20 (see the generated ExecStart); the exec-array form compose used
+# has no equivalent here.
 HealthCmd=redis-cli ping
 HealthInterval=5s
 HealthTimeout=3s

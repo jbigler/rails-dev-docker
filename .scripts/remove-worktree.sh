@@ -150,7 +150,7 @@ fi
 rm -f "${root}/.units/${clean_name}.env" "${root}/.units/${clean_name}.share.env"
 
 # Drop the dashboard's claude status file for this worktree
-rm -f "${root}/.docker-config/status/${clean_name}.json"
+rm -f "${root}/.container-config/status/${clean_name}.json"
 
 # Drop this worktree's home. Its ~/.claude holds a live OAuth refresh token
 # valid for weeks, so an orphaned home is a stale credential, not just

@@ -34,7 +34,7 @@ ALL=(rails rustfs rustfs-init redis db playwright claude net-network)
 require_units() {
   systemctl --user cat "$(unit rails)" >/dev/null 2>&1 \
     || die "$(unit rails) does not exist. Install the units first:
-    mise run podman:install"
+    mise run units:install"
   # Refuse rather than warn. Starting units that no longer match the templates
   # burns a cycle and reports the *previous* failure, which reads as a fix that
   # did not work instead of a fix that was never installed -- twice now.
@@ -55,14 +55,14 @@ require_home() {
 # seed-home.sh exists to prevent. That difference is invisible until first boot,
 # and podman reports one path per attempt, so check them all at once.
 #
-# Only the services `up` starts are checked. nvim@ and claude@ mount things
-# (the kitty socket, /usr/bin/kitten) that are legitimately absent until you
-# actually run them.
+# Only the services `up` starts are checked. nvim@ mounts things (the kitty
+# socket, /usr/bin/kitten) that are legitimately absent until you run it, and
+# claude is a script rather than a unit, checking its own mounts as it goes.
 missing_mount_sources() {
   ( set -a; . "$WT_ENV"; set +a
     local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" svc f line src
     for svc in db redis rustfs-init rustfs rails playwright; do
-      f="$ROOT/.docker-config/quadlet/$svc@.container"
+      f="$ROOT/.container-config/quadlet/$svc@.container"
       [[ -f "$f" ]] || continue
       while IFS= read -r line; do
         src="${line#Volume=}"; src="${src%%:*}"
@@ -144,7 +144,7 @@ diagnose_failure() {
     case "$state" in
       active)     printf '  ok      %-14s active\n' "$svc" >&2 ;;
       activating) printf '  ...     %-14s activating\n' "$svc" >&2 ;;
-      "")         printf '  MISSING %-14s no such unit -- run: mise run podman:install\n' "$svc" >&2 ;;
+      "")         printf '  MISSING %-14s no such unit -- run: mise run units:install\n' "$svc" >&2 ;;
       *)          printf '  FAILED  %-14s %s (result=%s)\n' "$svc" "$state" "${result:-?}" >&2 ;;
     esac
   done
@@ -197,16 +197,16 @@ diagnose_failure() {
         if podman image exists "$img" 2>/dev/null; then
           printf '  ok      %s\n' "$img" >&2
         else
-          printf '  MISSING %s  <- mise run podman:build\n' "$img" >&2
+          printf '  MISSING %s  <- mise run build\n' "$img" >&2
         fi
       done
       printf '\n' >&2 )
   fi
 
   printf 'Common causes, in order of likelihood:\n' >&2
-  printf '  1. images not built yet          -> mise run podman:build\n' >&2
-  printf '  2. templates not installed       -> mise run podman:install\n' >&2
-  printf '  3. host prerequisites            -> mise run podman:doctor\n' >&2
+  printf '  1. images not built yet          -> mise run build\n' >&2
+  printf '  2. templates not installed       -> mise run units:install\n' >&2
+  printf '  3. host prerequisites            -> mise run doctor\n' >&2
 }
 
 cmd_up() {
@@ -265,7 +265,7 @@ cmd_down() {
   printf '  %s\n' "${present[@]}"
   printf '\nThe database and any uploaded rustfs objects go with them.\n'
   printf 'If you meant to stop the containers and keep the data, use:\n'
-  printf '    mise run podman:stop\n\n'
+  printf '    mise run stop\n\n'
 
   if [[ "${FORCE:-}" == "1" ]]; then
     printf 'FORCE=1 set; proceeding without asking.\n'
@@ -297,7 +297,7 @@ cmd_pull() {
   local img imgs=()
   local f
   for f in db redis rustfs rustfs-init; do
-    img="$(sed -n 's/^Image=//p' "$ROOT/.docker-config/quadlet/$f@.container" | head -1)"
+    img="$(sed -n 's/^Image=//p' "$ROOT/.container-config/quadlet/$f@.container" | head -1)"
     [[ -n "$img" && "$img" != localhost/* && "$img" != '${'* ]] || continue
     imgs+=("$img")
   done
@@ -364,7 +364,7 @@ cmd_exec() {
     --network "$P-$W-dev" \
     --userns keep-id:uid=1000,gid=1000 --user 1000:1000 \
     --label traefik.enable=false \
-    --env-file "$ROOT/.docker-config/.env" --env-file "$WT_ENV" \
+    --env-file "$ROOT/.container-config/.env" --env-file "$WT_ENV" \
     -v "$WT_DIR:/app:z" -v "$ROOT/.home/$W:/home/appuser:z" \
     -v "${GEM_VOLUME}:/usr/local/bundle" \
     -v "$P-$W-node-modules:/app/node_modules:U" \

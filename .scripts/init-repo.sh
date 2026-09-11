@@ -71,7 +71,7 @@ else
   sed "s|{{WORKTREE_ID}}|0|g" "$template_file" > "${clone_dir}/mise.local.toml"
 fi
 
-# Pre-create node_modules so Docker doesn't create it as root
+# Pre-create node_modules as the volume's mount point (see create-worktree.sh)
 mkdir -p "${clone_dir}/node_modules"
 
 echo ""
@@ -86,8 +86,8 @@ echo "  Neovim port:     7000"
 echo ""
 echo "Next, from inside ${clone_dir}:"
 echo "  mise trust -y && mise install"
-echo "  mise run podman:build      # generates the unit env file, then builds"
-echo "  mise run podman:up"
+echo "  mise run build      # generates the unit env file, then builds"
+echo "  mise run up"
 echo "  Ruby debug port: 33000"
 echo ""
 echo "cd ${clone_dir} to get started"

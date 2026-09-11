@@ -67,7 +67,7 @@ if ! grep -q claude-status-hook "$SETTINGS_JSON"; then
   ' "$SETTINGS_JSON" > "$tmp" && mv "$tmp" "$SETTINGS_JSON"
 fi
 
-# Refresh global memory from the committed copy (.docker-config/CLAUDE.md).
+# Refresh global memory from the committed copy (.container-config/CLAUDE.md).
 # Plain copy, not a bind mount at this path: rtk init rewrites CLAUDE.md via
 # temp-file + rename, which fails on a file that is itself a mount point.
 cp /opt/claude/CLAUDE.md "$CONFIG_DIR/CLAUDE.md"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dump this worktree's development database and its RustFS objects into
-# .docker-config/db-dumps/, which is exactly where the restore path reads from:
+# .container-config/db-dumps/, which is exactly where the restore path reads from:
 # db@'s initdb hook (restore-dump.sh) creates and restores <dbname>.dump on a
 # first start against an empty data volume, and rustfs-init@ untars
 # rustfs_data.tar.gz when /data/rustfs0 is absent. So a dump taken here is
@@ -18,7 +18,7 @@ ROOT="$(find_project_root)"
 : "${CURRENT_WORKTREE_NAME:?CURRENT_WORKTREE_NAME unset (mise env not loaded)}"
 P="$PROJECT_PREFIX"
 W="$CURRENT_WORKTREE_NAME"
-DUMP_DIR="$ROOT/.docker-config/db-dumps"
+DUMP_DIR="$ROOT/.container-config/db-dumps"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 

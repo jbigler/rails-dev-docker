@@ -120,8 +120,10 @@ else
   sed "s|{{WORKTREE_ID}}|${next_id}|g" "$template_file" > "${worktree_dir}/mise.local.toml"
 fi
 
-# Pre-create node_modules so Docker doesn't create it as root when
-# mounting the node_modules volume over the bind-mounted worktree.
+# Pre-create node_modules as the mount point for the node_modules volume inside
+# the bind-mounted worktree. The original reason -- the Docker daemon creating
+# it root-owned -- no longer applies: rootless podman creates it as you. Kept so
+# the directory's ownership is never in question.
 mkdir -p "${worktree_dir}/node_modules"
 
 # --- Seed the per-worktree home from the template ---
@@ -129,7 +131,7 @@ mkdir -p "${worktree_dir}/node_modules"
 echo "Seeded home: .home/${clean_name}"
 
 # --- Seed untracked files (secrets/env) from the base worktree ---
-SEED_MANIFEST="${root}/.docker-config/worktree-seed.txt"
+SEED_MANIFEST="${root}/.container-config/worktree-seed.txt"
 base_dir="${root}/$(find_base_worktree_name)"
 if [ -f "$SEED_MANIFEST" ]; then
   echo "Seeding untracked files from ${base_dir}..."

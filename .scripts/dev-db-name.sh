@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Print the development database name from a Rails config/database.yml.
 #
-# Postgres only — the only adapter this Docker tooling supports. Best-effort:
+# Postgres only — the only adapter this tooling supports. Best-effort:
 # prints nothing (exit 0) when the name can't be resolved statically (file
 # missing, non-postgres adapter, or a dynamic ERB/ENV database value), so
 # callers can fall back to a manual DEV_DB_NAME in mise.local.toml.

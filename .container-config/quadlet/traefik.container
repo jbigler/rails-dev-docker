@@ -15,7 +15,7 @@ IP=@@TRAEFIK_IP@@
 #
 # Rootless podman cannot publish a port below net.ipv4.ip_unprivileged_port_start
 # (1024 by default), so :80 needs that threshold lowered once:
-#   mise run podman:allow-ports
+#   mise run allow-ports
 # The alternative is socket activation, which Traefik supports since v3.1 by
 # matching a socket's FileDescriptorName to an entryPoint name. It avoids the
 # sysctl but cannot be a Quadlet unit -- podman-systemd.unit(5) states Quadlet
@@ -58,6 +58,6 @@ Exec=--providers.docker=true \
 [Service]
 Restart=unless-stopped
 
-# Started on demand: `mise run podman:proxy`, or pulled in by a
+# Started on demand: `mise run proxy:up`, or pulled in by a
 # worktree unit's Wants=. No [Install] section, so nothing runs at login --
 # which is the point of leaving linger off.
