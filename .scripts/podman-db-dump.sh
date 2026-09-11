@@ -4,9 +4,7 @@
 # db@'s initdb hook (restore-dump.sh) creates and restores <dbname>.dump on a
 # first start against an empty data volume, and rustfs-init@ untars
 # rustfs_data.tar.gz when /data/rustfs0 is absent. So a dump taken here is
-# picked up automatically by the next `up` on an empty volume -- and a dump
-# taken by the docker `db:dump` on main is picked up the same way, which is how
-# the data moves between engines with no migration code.
+# picked up automatically by the next `up` on an empty volume.
 #
 # Usage: podman-db-dump.sh [clear]
 set -euo pipefail

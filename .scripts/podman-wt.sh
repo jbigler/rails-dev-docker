@@ -108,9 +108,8 @@ require_env() {
     "$ROOT/.scripts/units-env.sh"
   }
   # rails@ loads the share overrides unconditionally, and podman's --env-file is
-  # fatal on a missing path. A worktree set up before wt:share existed has the
-  # file above but not this one, so create the empty form rather than letting
-  # the unit fail on an upgrade.
+  # fatal on a missing path, so the empty form has to exist whenever the file
+  # above does -- including after someone deletes it by hand.
   [[ -f "$WT_SHARE_ENV" ]] || \
     printf '# Written by wt:share. Empty means not shared.\n' > "$WT_SHARE_ENV"
 }

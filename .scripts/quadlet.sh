@@ -11,11 +11,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 ROOT="$(find_project_root)"
 
 : "${PROJECT_PREFIX:?PROJECT_PREFIX unset (mise env not loaded)}"
-# 10.214, not the 10.213 the old compose proxy used. netavark refuses to create
-# a network whose subnet is already in use on the host ("subnet ... is already
-# used on the host or by another config", exit 125), and a machine that ran the
-# docker stack still has 10.213.0.0/24 until its networks are pruned. Separate
-# ranges mean the conversion did not require tearing docker down first. Settable
+# netavark refuses to create a network whose subnet is already in use on the
+# host ("subnet ... is already used on the host or by another config", exit
+# 125), so a second workspace on this machine needs a different range. Settable
 # from mise.local.toml -- .mise/config.toml defines all three as env.
 PODMAN_PROXY_SUBNET="${PODMAN_PROXY_SUBNET:-10.214.0.0/24}"
 PODMAN_PROXY_IP_RANGE="${PODMAN_PROXY_IP_RANGE:-10.214.0.128/25}"
@@ -42,27 +40,24 @@ render() {
       "$1"
 }
 
-# Exact-subnet check across both engines. netavark only reports the clash when
-# the unit starts, which surfaces as a systemd dependency failure several units
-# deep -- much easier to catch here.
-subnet_in_use_by() {
-  local want="$1" engine ids id own="${PROJECT_PREFIX}_proxy"
-  for engine in podman docker; do
-    command -v "$engine" >/dev/null 2>&1 || continue
-    ids="$("$engine" network ls -q 2>/dev/null || true)"
-    [[ -n "$ids" ]] || continue
-    for id in $ids; do
-      # Skip this stack's own proxy network. It holds the subnet precisely
-      # because the proxy is running, which is the healthy state -- flagging it
-      # told you to renumber a working setup.
-      [[ "$("$engine" network inspect "$id" --format '{{.Name}}' 2>/dev/null)" == "$own" ]] && continue
-      if "$engine" network inspect "$id" 2>/dev/null \
-           | grep -oiE '"subnet": *"[^"]+"' \
-           | grep -oE '[0-9.]+/[0-9]+' \
-           | grep -qxF "$want"; then
-        printf '%s' "$engine"; return 0
-      fi
-    done
+# Exact-subnet check. netavark only reports the clash when the unit starts,
+# which surfaces as a systemd dependency failure several units deep -- much
+# easier to catch here.
+subnet_is_taken() {
+  local want="$1" ids id own="${PROJECT_PREFIX}_proxy"
+  ids="$(podman network ls -q 2>/dev/null || true)"
+  [[ -n "$ids" ]] || return 1
+  for id in $ids; do
+    # Skip this stack's own proxy network. It holds the subnet precisely because
+    # the proxy is running, which is the healthy state -- flagging it told you to
+    # renumber a working setup.
+    [[ "$(podman network inspect "$id" --format '{{.Name}}' 2>/dev/null)" == "$own" ]] && continue
+    if podman network inspect "$id" 2>/dev/null \
+         | grep -oiE '"subnet": *"[^"]+"' \
+         | grep -oE '[0-9.]+/[0-9]+' \
+         | grep -qxF "$want"; then
+      return 0
+    fi
   done
   return 1
 }
@@ -393,8 +388,8 @@ cmd_doctor() {
 
   printf '\n== proxy subnet ==\n'
   local holder
-  if holder="$(subnet_in_use_by "$PODMAN_PROXY_SUBNET")"; then
-    bad "$PODMAN_PROXY_SUBNET is already used by a $holder network, so netavark
+  if subnet_is_taken "$PODMAN_PROXY_SUBNET"; then
+    bad "$PODMAN_PROXY_SUBNET is already used by another podman network, so netavark
         will refuse to create it (exit 125, surfacing as a dependency failure
         for traefik). Pick a free range -- one line, no continuations:
             PODMAN_PROXY_SUBNET=10.215.0.0/24 PODMAN_PROXY_IP_RANGE=10.215.0.128/25 PODMAN_TRAEFIK_IP=10.215.0.2 mise run units:install
@@ -433,18 +428,11 @@ cmd_doctor() {
     holder80="unknown"
     if [[ "$(podman inspect "${PROJECT_PREFIX}-traefik" --format '{{.State.Running}}' 2>/dev/null)" == "true" ]]; then
       holder80="podman"
-    elif command -v docker >/dev/null 2>&1 \
-         && docker ps --format '{{.Names}}' 2>/dev/null | grep -q traefik; then
-      holder80="docker"
     fi
   fi
   case "$holder80" in
     "")      ok ":80 is free" ;;
     podman)  ok ":80 held by ${PROJECT_PREFIX}-traefik (this stack)" ;;
-    docker)  warn ":80 is held by a Docker traefik. Expected before the cutover, but the
-            podman proxy cannot start until it stops -- only one process can bind
-            127.0.0.1:80, so whichever proxy is up owns every *.localhost host:
-                mise run proxy:down" ;;
     *)       warn ":80 is bound by a process this script cannot identify. The podman
             proxy will fail with 'bind: address already in use' until it frees up." ;;
   esac

@@ -39,11 +39,10 @@ PROJECT_PREFIX = "$name"
 GEM_VOLUME_BASE = "${name}_shared_gems"
 
 # --- podman proxy network (see .scripts/quadlet.sh) ---------------------
-# The defaults in quadlet.sh (10.214.0.0/24) already avoid the Docker proxy
-# network's 10.213.0.0/24. Uncomment and change these only if that range is
-# also taken -- netavark refuses a subnet already in use on the host, and the
-# failure surfaces as a dependency error for traefik rather than naming the
-# subnet. \`mise run doctor\` reports the clash directly.
+# Uncomment and change these only if 10.214.0.0/24 is already taken on this
+# machine -- netavark refuses a subnet already in use, and the failure surfaces
+# as a dependency error for traefik rather than naming the subnet.
+# \`mise run doctor\` reports the clash directly.
 # PODMAN_PROXY_SUBNET = "10.215.0.0/24"
 # PODMAN_PROXY_IP_RANGE = "10.215.0.128/25"
 # PODMAN_TRAEFIK_IP = "10.215.0.2"
