@@ -17,6 +17,21 @@ done
 
 export GIT_TERMINAL_PROMPT=0
 
+# Editor tooling that is a gem rather than an npm package. Installed here for
+# the same reason the npm ones are: it belongs to the editor, not to the app, so
+# it has no business in the app Gemfile.
+#
+# It lands in /usr/local/bundle -- the GEM_VOLUME mount, shared across every
+# worktree on this ruby -- so the install happens once per ruby version and not
+# once per container. `gem list -i` first, matching how test:rails_watcher
+# handles retest: an install on every start would add seconds to every attach.
+#
+# --no-document because nobody reads rdoc in a container, and it is most of the
+# install time.
+for g in ruby-lsp; do
+	gem list -i "$g" >/dev/null 2>&1 || gem install "$g" --no-document
+done
+
 # gh extensions live in the per-worktree home, so a fresh home has none.
 # --force installs when missing, upgrades when stale, no-ops when current.
 gh extension install github/gh-stack --force >/dev/null 2>&1 || true
