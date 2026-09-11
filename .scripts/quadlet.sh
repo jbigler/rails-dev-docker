@@ -190,10 +190,43 @@ cmd_check_stale() {
   return 1
 }
 
+# The same class again, one layer down. podman's --env-file parser takes a
+# value verbatim -- pkg/env/env.go does `strings.Cut(line, "=")` then
+# `env[name] = val`, with no quote stripping and no interpolation -- where the
+# compose .env parser stripped quotes. So DEV_HOSTS="rails" reached Rails as
+# the literal 7 characters including quotes and config.hosts rejected the host,
+# with nothing in any log naming the quotes.
+#
+# systemd's EnvironmentFile= DOES strip quotes, so a quoted value behaves
+# differently depending on which of the two reads it -- which is worse than
+# either rule on its own, since .unit-env/<wt>.env is read by both.
+lint_env_values() {
+  local bad=0 f n line
+  for f in "$ROOT/.container-config/.env" "$ROOT"/.unit-env/*.env; do
+    [[ -f "$f" ]] || continue
+    while IFS=: read -r n line; do
+      [[ -n "$line" ]] || continue
+      printf '  %s:%s\n    %s\n' "${f#"$ROOT/"}" "$n" "$line" >&2
+      bad=1
+    done < <(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=["'"'"'].*["'"'"']$' "$f" 2>/dev/null)
+    while IFS=: read -r n line; do
+      [[ -n "$line" ]] || continue
+      printf '  %s:%s\n    %s   <- no interpolation; use a bare name to pass it through\n' \
+        "${f#"$ROOT/"}" "$n" "$line" >&2
+      bad=1
+    done < <(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=.*\$\{' "$f" 2>/dev/null)
+  done
+  (( bad )) || return 0
+  printf '\nerror: podman passes these values verbatim -- the quotes or the\n' >&2
+  printf '${...} become part of the value the container sees.\n' >&2
+  return 1
+}
+
 cmd_install() {
   require_hard
   lint_templates || die "refusing to install templates that would silently lose data"
   lint_env_expansion || die "refusing to install templates whose keys cannot expand"
+  lint_env_values || die "refusing to install with env values podman would mangle"
   mkdir -p "$DEST"
   local src b out
   for src in "$ROOT"/.container-config/quadlet/*; do
