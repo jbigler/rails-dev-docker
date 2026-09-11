@@ -21,6 +21,7 @@ WT_DIR="$ROOT/$W"
 # The env file lives in the wrapper, not the worktree: a worktree is a checkout
 # of the app repo, and this file holds POSTGRES_PASSWORD.
 WT_ENV="$ROOT/.units/$W.env"
+WT_SHARE_ENV="$ROOT/.units/$W.share.env"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 unit() { printf '%s-%s@%s.service' "$P" "$1" "$W"; }
@@ -106,6 +107,12 @@ require_env() {
     printf 'no env file for this worktree; generating it...\n'
     "$ROOT/.scripts/units-env.sh"
   }
+  # rails@ loads the share overrides unconditionally, and podman's --env-file is
+  # fatal on a missing path. A worktree set up before wt:share existed has the
+  # file above but not this one, so create the empty form rather than letting
+  # the unit fail on an upgrade.
+  [[ -f "$WT_SHARE_ENV" ]] || \
+    printf '# Written by wt:share. Empty means not shared.\n' > "$WT_SHARE_ENV"
 }
 
 # systemd reports only "A dependency job for X failed" and does not name the

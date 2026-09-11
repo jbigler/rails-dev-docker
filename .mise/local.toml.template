@@ -14,6 +14,12 @@ RUSTFS_UI_HOST = "s3-ui.{{ env.WORKTREE_HOST }}"
 DOMAIN = "{{ env.WORKTREE_HOST }}"
 RUBY_DEBUG_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 33000 + id }}"
 NVIM_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 17000 + id }}"
+# Loopback-published rails :3000 and rustfs :9000. Traefik does not need these
+# -- it reaches both over the container network -- but tailscaled runs in the
+# host network namespace, where a rootless container's IP is unreachable, so
+# wt:share points `tailscale serve` at these instead of at a container IP.
+APP_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 13000 + id }}"
+S3_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 19000 + id }}"
 RUSTFS_ENDPOINT = "http://{{ env.S3_HOST }}"
 
 # Host → container Postgres over TCP (the bind-mounted UNIX socket does not work

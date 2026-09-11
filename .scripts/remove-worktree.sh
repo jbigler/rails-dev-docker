@@ -147,7 +147,7 @@ fi
 
 # The unit env file lives in the workspace root, not the worktree, so removing
 # the worktree directory does not take it with it.
-rm -f "${root}/.units/${clean_name}.env"
+rm -f "${root}/.units/${clean_name}.env" "${root}/.units/${clean_name}.share.env"
 
 # Drop the dashboard's claude status file for this worktree
 rm -f "${root}/.docker-config/status/${clean_name}.json"

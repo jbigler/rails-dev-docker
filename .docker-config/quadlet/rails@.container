@@ -41,12 +41,24 @@ User=1000:1000
 
 EnvironmentFile=@@ROOT@@/.docker-config/.env
 EnvironmentFile=@@ROOT@@/.units/%i.env
+# Written by wt:share, empty otherwise. Last wins, in both sections.
+EnvironmentFile=@@ROOT@@/.units/%i.share.env
 
 # Traefik-routed hosts resolve to Traefik's static proxy-network address; its
 # host ports are loopback-bound, so host-gateway cannot reach them.
-PodmanArgs=--add-host ${WORKTREE_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${S3_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${RUSTFS_UI_HOST}:${PODMAN_TRAEFIK_IP}
+# TS_HOST_ENTRY lets wt:share add the tailnet name, so rails resolves its own
+# public hostname server-side (signed URLs, default_url_options). Quadlet has no
+# conditional syntax, so when not sharing it holds a duplicate of the first
+# entry rather than being empty -- an empty --add-host is a hard error.
+PodmanArgs=--add-host ${WORKTREE_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${S3_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${RUSTFS_UI_HOST}:${PODMAN_TRAEFIK_IP} --add-host ${TS_HOST_ENTRY}
 # Loopback only -- a remote debug session is arbitrary code execution.
 PublishPort=127.0.0.1:${RUBY_DEBUG_PORT}:38698
+# Loopback only, and normally unused: Traefik reaches :3000 over the container
+# network. It exists because tailscaled runs in the host network namespace and
+# a rootless container's IP is unreachable from there -- `podman unshare
+# --rootless-netns` is the documented way in, and tailscale has no such hook.
+# So wt:share points `tailscale serve` at this port instead of a container IP.
+PublishPort=127.0.0.1:${APP_PORT}:3000
 
 Volume=@@ROOT@@/%i:/app:z
 Volume=@@ROOT@@/.home/%i:/home/appuser:z
@@ -83,6 +95,8 @@ Exec=bin/dev
 # loaded here too. Both lines are needed and neither is redundant: this one
 # resolves the unit's own keys, the [Container] one gives the process its env.
 EnvironmentFile=@@ROOT@@/.units/%i.env
+# Written by wt:share, empty otherwise. Last wins, in both sections.
+EnvironmentFile=@@ROOT@@/.units/%i.share.env
 Restart=on-failure
 RestartSec=5
 # The entrypoint waits on postgres and redis before booting Puma; systemd's 90s

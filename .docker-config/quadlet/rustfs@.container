@@ -11,6 +11,8 @@ ContainerName=@@P@@-%i-rustfs
 Network=@@P@@-%i-dev
 NetworkAlias=rustfs
 Network=@@P@@-proxy.network
+# Loopback only; see rails@ for why wt:share needs a published port.
+PublishPort=127.0.0.1:${S3_PORT}:9000
 EnvironmentFile=@@ROOT@@/.units/%i.env
 Environment=RUSTFS_VOLUMES=/data/rustfs{0..3}
 Environment=RUSTFS_ACCESS_KEY=rustfsadmin
