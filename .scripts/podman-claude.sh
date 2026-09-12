@@ -28,8 +28,7 @@ WT_ENV="$ROOT/.unit-env/$W.env"
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-[[ -f "$WT_ENV" ]] || { printf 'no env file at %s; generating it...\n' "$WT_ENV" >&2
-                        "$ROOT/.scripts/units-env.sh" >&2; }
+ensure_unit_env
 "$ROOT/.scripts/seed-home.sh" "$W" >&2
 
 # Only the unit env file. .container-config/.env is a podman --env-file, NOT a

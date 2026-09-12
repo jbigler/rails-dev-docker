@@ -28,11 +28,10 @@ WT_ENV="$ROOT/.unit-env/$CURRENT_WORKTREE_NAME.env"
 [[ -d "$WT_DIR" ]] || die "no worktree directory at $WT_DIR"
 
 # Generate it rather than complaining: build-before-up would otherwise be an
-# ordering trap, and podman-wt.sh already self-heals the same way.
-if [[ ! -f "$WT_ENV" ]]; then
-  printf 'no env file at %s; generating it...\n' "$WT_DIR"
-  "$ROOT/.scripts/units-env.sh"
-fi
+# ordering trap, and podman-wt.sh already self-heals the same way. Stale counts
+# as missing -- the whole point of this script is to build the tags a .nvmrc or
+# .ruby-version bump asks for.
+ensure_unit_env
 set -a; . "$WT_ENV"; set +a
 
 for v in RAILS_IMAGE NVIM_IMAGE CLAUDE_IMAGE PLAYWRIGHT_IMAGE RUBY_VERSION NODE_VERSION PLAYWRIGHT_VERSION; do
@@ -61,11 +60,14 @@ common=(
   --build-arg "UPDATE_CLAUDE_CODE=${UPDATE_CLAUDE_CODE:-0}"
 )
 
+built=()
+
 build_target() {
   local target="$1" tag="$2"; shift 2
   printf '\n==> %s  ->  %s\n' "$target" "$tag"
   podman build "${PULL[@]}" --target "$target" -t "$tag" \
     "${common[@]}" "$@" -f "$CTX/Dockerfile" "$CTX"
+  built+=("$tag")
 }
 
 for svc in "${services[@]}"; do
@@ -78,11 +80,19 @@ for svc in "${services[@]}"; do
       printf '\n==> playwright  ->  %s\n' "$PLAYWRIGHT_IMAGE"
       podman build "${PULL[@]}" -t "$PLAYWRIGHT_IMAGE" \
         --build-arg "PLAYWRIGHT_VERSION=$PLAYWRIGHT_VERSION" \
-        -f "$CTX/Dockerfile.playwright" "$CTX" ;;
+        -f "$CTX/Dockerfile.playwright" "$CTX"
+      built+=("$PLAYWRIGHT_IMAGE") ;;
     *) die "unknown service '$svc' (rails nvim claude playwright)" ;;
   esac
 done
 
+# The tags this run produced, not every tag matching the repo name: the old
+# footer grepped `podman images` for localhost/<prefix>/rails and so listed the
+# *previous* node/ruby tags as if they had just been built -- while omitting
+# nvim, claude and playwright, whose repo names did not match.
 printf '\nBuilt:\n'
-podman images --format '  {{.Repository}}:{{.Tag}}  {{.Size}}' \
-  | grep -E "$(printf '%s' "${RAILS_IMAGE%%:*}" | sed 's/[.[\*^$]/\\&/g')" || true
+for tag in "${built[@]}"; do
+  printf '  %-52s %s\n' "$tag" \
+    "$(podman image inspect --format '{{.Size}}' "$tag" 2>/dev/null \
+       | numfmt --to=iec --suffix=B 2>/dev/null)"
+done

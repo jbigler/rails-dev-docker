@@ -338,7 +338,7 @@ description = "Check that Traefik actually discovered the proxy containers over 
 run = "{{config_root}}/.scripts/quadlet.sh verify"
 
 [tasks."units:env"]
-description = "Write the unit env file the Quadlet templates read. From a worktree, just that one; from the workspace root, every worktree in ports.registry. Rerun after a ruby/node/playwright bump or a template change."
+description = "Write the unit env file the Quadlet templates read. From a worktree, just that one; from the workspace root, every worktree in ports.registry. up, build and claude rerun it themselves when a .nvmrc, .ruby-version, Gemfile.lock or config change makes it stale; run it by hand only to refresh every worktree at once."
 run = "{{config_root}}/.scripts/units-env.sh"
 
 [tasks.build]

@@ -107,10 +107,7 @@ require_mounts() {
 }
 
 require_env() {
-  [[ -f "$WT_ENV" ]] || {
-    printf 'no env file for this worktree; generating it...\n'
-    "$ROOT/.scripts/units-env.sh"
-  }
+  ensure_unit_env
   # rails@ loads the share overrides unconditionally, and podman's --env-file is
   # fatal on a missing path, so the empty form has to exist whenever the file
   # above does -- including after someone deletes it by hand.
@@ -250,8 +247,24 @@ check_proxy() {
   return 1
 }
 
+# A .nvmrc or .ruby-version bump changes the image tags, and podman answers a
+# missing localhost/ image by trying to pull it -- the unit then sits in
+# activating until it times out, and only diagnose_failure names the tag. Say it
+# before starting anything instead. rails@ Wants= nvim and playwright, so a
+# missing image there fails a unit too, just not fatally.
+require_images() {
+  local missing
+  missing="$( set -a; . "$WT_ENV"; set +a
+    for img in "$RAILS_IMAGE" "$NVIM_IMAGE" "$PLAYWRIGHT_IMAGE"; do
+      podman image exists "$img" || printf '  %s\n' "$img"
+    done )"
+  [[ -z "$missing" ]] || die "these images do not exist yet:
+$missing
+    mise run build"
+}
+
 cmd_up() {
-  require_units; require_env; require_home; require_mounts
+  require_units; require_env; require_images; require_home; require_mounts
   start_proxy || true   # a failure here is reported by check_proxy, with detail
   # One unit; systemd pulls the network, data services and traefik in through
   # Requires=/Wants=, and gates rails on db/redis/rustfs being *healthy*.
