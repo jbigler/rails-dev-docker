@@ -11,7 +11,7 @@
 #
 # kitty-specific: asks kitty for its live colors over its remote-control socket.
 # Anything else (no kitty, socket refused, non-kitty terminal, CI) falls back to
-# "dark". Never fails — a broken detector must not break `docker compose up`.
+# "dark". Never fails — a broken detector must not break `mise run up`.
 set -uo pipefail
 
 # Respect an explicit override from the shell or mise.local.toml.

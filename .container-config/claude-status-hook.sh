@@ -3,7 +3,7 @@
 # wt.localhost dashboard can show a live status badge. Registered for several
 # hook events by entrypoint-claude.sh; the event name arrives in the JSON
 # payload on stdin. Writes /status/<worktree>.json — a bind mount of
-# .docker-config/status/, which the proxy's home container serves at /status/.
+# .container-config/status/, which the proxy's home container serves at /status/.
 set -eu
 
 [ -n "${WORKTREE_NAME:-}" ] && [ -d /status ] || exit 0

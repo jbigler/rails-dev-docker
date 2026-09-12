@@ -1,8 +1,6 @@
 [env]
 CURRENT_WORKTREE_NAME = "{{ exec(command='git rev-parse --show-toplevel') | basename }}"
 MAIN_WORKTREE_PATH = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}"
-COMPOSE_PROJECT_NAME = "{{ env.PROJECT_PREFIX }}-{{ env.CURRENT_WORKTREE_NAME }}"
-COMPOSE_FILE = "{% set dev = '.dev/compose.yml' %}{{config_root}}/../.docker-config/compose.yml{% if dev is exists %}:{{config_root}}/.dev/compose.yml{% endif %}"
 RUBY_DEBUG_LOCAL_FS_MAP = "/app/:{{ cwd }}"
 RUBY_VERSION = "{{ read_file(path='.ruby-version') | trim }}"
 GEM_VOLUME = "{{ env.GEM_VOLUME_BASE }}_ruby_{{ env.RUBY_VERSION | trim | replace(from='.', to='_') }}"
@@ -14,10 +12,15 @@ RUSTFS_UI_HOST = "s3-ui.{{ env.WORKTREE_HOST }}"
 DOMAIN = "{{ env.WORKTREE_HOST }}"
 RUBY_DEBUG_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 33000 + id }}"
 NVIM_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 17000 + id }}"
+# Loopback-published rails :3000 and rustfs :9000. Traefik does not need these
+# -- it reaches both over the container network -- but tailscaled runs in the
+# host network namespace, where a rootless container's IP is unreachable, so
+# wt:share points `tailscale serve` at these instead of at a container IP.
+APP_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 13000 + id }}"
+S3_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 19000 + id }}"
 RUSTFS_ENDPOINT = "http://{{ env.S3_HOST }}"
 
-# Host → container Postgres over TCP (the bind-mounted UNIX socket does not work
-# across the macOS Docker Desktop VM boundary). DB_PORT is published per worktree
+# Host → container Postgres over TCP. DB_PORT is published per worktree
 # by the db service; these PG* vars are host-shell only and never enter the
 # container (the app service has no PG* passthrough), so `bin/rails`, `psql`, etc.
 # run on the host resolve to this worktree's containerized Postgres. RAILS_ENV
@@ -35,14 +38,17 @@ PGPASSWORD = "password"
 DEV_DB_NAME = "{{ exec(command='../.scripts/dev-db-name.sh config/database.yml') | trim }}"
 # Playwright version pinned by this worktree's Gemfile.lock (playwright-ruby-client
 # tracks upstream Playwright). Drives the browser-server image tag and the npm
-# playwright-core version; empty when unresolvable → compose falls back to its
-# default tag (and `mise run up` warns).
+# playwright-core version; empty when unresolvable → units:env falls back to a
+# default tag and warns.
 PLAYWRIGHT_VERSION = "{{ exec(command='../.scripts/playwright-version.sh Gemfile.lock') | trim }}"
 # Host → containerized Playwright browser server (published per worktree by the
 # playwright service), so system tests run ON THE HOST connect to this worktree's
 # in-container browser. APP_HOST is how that browser navigates back to the
-# Capybara test server running on the host (Docker Desktop host alias).
-# These are host-shell only — inside the containers, .docker-config/.env wins.
+# Capybara test server running on the host.
+# These are host-shell only — inside the containers, .container-config/.env wins.
 PLAYWRIGHT_HOST_PORT = "{% set id = env.WORKTREE_ID | int %}{{ 18888 + id }}"
 PLAYWRIGHT_HOST = "ws://localhost:{{ env.PLAYWRIGHT_HOST_PORT }}/connect"
-APP_HOST = "host.docker.internal"
+# podman writes both host.containers.internal and host.docker.internal into
+# /etc/hosts (podman-run(1), --add-host), so either name resolves; this is the
+# native one.
+APP_HOST = "host.containers.internal"

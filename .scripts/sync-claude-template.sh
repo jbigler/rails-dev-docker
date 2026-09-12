@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sync the Claude config set between a worktree's home (.home/<slug>) and the
-# template (.docker-config/home-template) that seeds new worktrees.
+# template (.container-config/home-template) that seeds new worktrees.
 #
 # Usage:
 #   sync-claude-template.sh promote <worktree> [--replace] [--yes]
@@ -35,7 +35,7 @@ usage() {
 }
 
 root=$(find_project_root)
-template="$root/.docker-config/home-template"
+template="$root/.container-config/home-template"
 stamp=$(date +%Y%m%d-%H%M%S)
 
 case "${1:-}" in -h|--help) usage 0 ;; esac

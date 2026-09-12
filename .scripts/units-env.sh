@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# Write .unit-env/<worktree>.env, the per-worktree values the Quadlet templates read.
+#
+# Quadlet does not expand shell variables in unit keys, but systemd DOES expand
+# ${VAR} in the generated ExecStart from an EnvironmentFile=. So everything that
+# varies per worktree -- ports derived from WORKTREE_ID, the routed hostnames,
+# the version-keyed image tags -- reaches the units through this file rather
+# than through the templates, which stay identical for every worktree.
+#
+# Run from inside a worktree, so mise has loaded that worktree's env. Rerun it
+# after anything that changes those values: a .ruby-version or .nvmrc bump, a
+# Gemfile.lock Playwright bump, or a new WORKTREE_ID.
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+ROOT="$(find_project_root)"
+
+: "${PROJECT_PREFIX:?run from the workspace root or a worktree -- mise env not loaded}"
+
+# Run from the workspace root, regenerate every worktree. CURRENT_WORKTREE_NAME
+# comes from the mise.local.toml inside a worktree, so at the root there is
+# none -- and failing there was unhelpful, because the case that most needs this
+# is a template change, which invalidates every worktree file at once.
+#
+# Each worktree is re-entered through mise rather than computed here: the values
+# come from evaluating that worktree own config -- its .ruby-version, .nvmrc,
+# Gemfile.lock, WORKTREE_ID -- which only mise can do. mise resolves env from
+# the invocation directory even though it runs tasks from config_root.
+if [[ -z "${CURRENT_WORKTREE_NAME:-}" ]]; then
+  root="$(find_project_root)"
+  registry="$root/ports.registry"
+  [[ -f "$registry" ]] || {
+    printf 'error: no %s, so there are no worktrees yet.\n' "$registry" >&2
+    printf '  Create the base worktree first: mise run init <user/repo>\n' >&2
+    exit 1
+  }
+  command -v mise >/dev/null || { printf 'error: mise is not on PATH\n' >&2; exit 1; }
+  rc=0 count=0
+  while IFS=: read -r slug _id; do
+    [[ -n "$slug" ]] || continue
+    if [[ ! -d "$root/$slug" ]]; then
+      printf 'skip %s: no directory -- stale ports.registry entry?\n' "$slug" >&2
+      continue
+    fi
+    printf '\n== %s ==\n' "$slug"
+    # One worktree failing must not stop the others.
+    ( cd "$root/$slug" && mise run units:env ) || rc=1
+    count=$((count + 1))
+  done < "$registry"
+  (( count )) || { printf 'error: %s listed no usable worktrees\n' "$registry" >&2; exit 1; }
+  exit "$rc"
+fi
+
+# Derived from the project root and the worktree name, never from $PWD: mise
+# runs tasks with the working directory set to config_root -- the wrapper root
+# -- no matter which worktree you invoke them from. Using $PWD wrote this file
+# to the wrapper root while the units read it from the workspace root, so
+# every unit failed with "no such file or directory" on a file that appeared to
+# exist. mise still resolves the *env* from the invocation directory, which is
+# why CURRENT_WORKTREE_NAME is correct here even though $PWD is not.
+WT_DIR="$ROOT/$CURRENT_WORKTREE_NAME"
+[[ -d "$WT_DIR" ]] || { printf 'error: no worktree directory at %s\n' "$WT_DIR" >&2; exit 1; }
+# Deliberately NOT inside the worktree. A worktree is a checkout of the *app*
+# repo, whose .gitignore this repo does not control, so a file there would be one
+# `git add -A` away from being committed -- and this one holds POSTGRES_PASSWORD.
+# Under $ROOT/.unit-env/ it sits in the wrapper, which ignores everything by
+# default, and one directory holds every worktree's file.
+mkdir -p "$ROOT/.unit-env"
+OUT="$ROOT/.unit-env/$CURRENT_WORKTREE_NAME.env"
+
+# An unset variable expands to an empty string in ExecStart, and podman then
+# does something quietly wrong rather than failing -- `--publish 127.0.0.1::5432`
+# picks a random host port, `--cpus=` is rejected only sometimes. So every value
+# is required, and a missing one is a hard error here where it is visible.
+REQUIRED=(
+  WORKTREE_ID WORKTREE_HOST S3_HOST RUSTFS_UI_HOST
+  DB_PORT RUBY_DEBUG_PORT NVIM_PORT PLAYWRIGHT_HOST_PORT APP_PORT S3_PORT
+  GEM_VOLUME MAIN_WORKTREE_PATH RUBY_VERSION NODE_VERSION
+  SSH_PATH SSH_AGENT_SOCK
+  CPUS_25 CPUS_50 CPUS_75 PGPASSWORD
+)
+missing=()
+for v in "${REQUIRED[@]}"; do
+  [[ -n "${!v:-}" ]] || missing+=("$v")
+done
+if (( ${#missing[@]} )); then
+  printf 'error: these are unset in this worktree'\''s mise env:\n' >&2
+  printf '  %s\n' "${missing[@]}" >&2
+  printf '\nIs mise.local.toml present in this worktree? It is rendered by\n' >&2
+  printf 'create-worktree.sh from .mise/local.toml.template.\n' >&2
+  exit 1
+fi
+
+# nvim's config mount, decided here because Quadlet cannot branch.
+#
+# Default (NVIM_CONFIG_DIR unset): a named volume shared by every worktree's
+# nvim container, mounted writable. nvim is then configured normally from inside
+# -- :U chowns the volume to the container user on first use, so lazy.nvim and
+# friends can write -- and the config survives wt:rm, which only removes
+# volumes carrying a worktree slug.
+#
+# Opt-in (NVIM_CONFIG_DIR set): that host directory, read-only. Use it to run
+# your desktop config unchanged; nvim cannot then write to it, so a plugin
+# manager that wants to edit a lockfile will complain.
+nvim_config_mount="${PROJECT_PREFIX}_nvim_config:/home/appuser/.config/nvim:U"
+nvim_config_source=volume
+if [[ -n "${NVIM_CONFIG_DIR:-}" ]]; then
+  if [[ ! -d "$NVIM_CONFIG_DIR" ]]; then
+    printf 'error: NVIM_CONFIG_DIR=%s is set but is not a directory.\n' "$NVIM_CONFIG_DIR" >&2
+    printf '  podman refuses a missing bind source, so nvim@ would fail to start.\n' >&2
+    printf '  Fix the path in mise.local.toml, or unset it to use the shared volume.\n' >&2
+    exit 1
+  fi
+  # systemd splits ExecStart on whitespace and Quadlet emits this unquoted, so a
+  # path containing a space would become two arguments.
+  case "$NVIM_CONFIG_DIR" in
+    *[[:space:]]*) printf 'error: NVIM_CONFIG_DIR contains whitespace, which cannot survive
+  systemd argument splitting: %s\n' "$NVIM_CONFIG_DIR" >&2; exit 1 ;;
+  esac
+  nvim_config_mount="${NVIM_CONFIG_DIR}:/home/appuser/.config/nvim:ro,z"
+  nvim_config_source=host
+fi
+
+# Empty PLAYWRIGHT_VERSION means Gemfile.lock could not be parsed; fall back to
+# the same default the compose file used to, and say so.
+pw="${PLAYWRIGHT_VERSION:-}"
+if [[ -z "$pw" ]]; then
+  pw=1.60.0
+  printf 'warn: PLAYWRIGHT_VERSION is empty (stale mise.local.toml?), using %s\n' "$pw" >&2
+fi
+
+{
+  printf '# Generated by .scripts/units-env.sh -- do not edit.\n'
+  printf '# Regenerate after a ruby/node/playwright bump: mise run units:env\n\n'
+
+  printf 'WORKTREE_HOST=%s\n'         "$WORKTREE_HOST"
+  # compose set these per service; they reach the containers through this file
+  # instead, since rails, nvim and claude all --env-file it. Where compose
+  # hardcoded a different value -- RUSTFS_ENDPOINT=http://rustfs:9000 for nvim
+  # and claude -- the template's own Environment= still wins: podman's
+  # specgenutil joins --env over --env-file ("File env is overridden by env").
+  printf 'DOMAIN=%s\n'               "$WORKTREE_HOST"
+  printf 'WORKTREE_NAME=%s\n'        "$CURRENT_WORKTREE_NAME"
+  # rails talks to rustfs through Traefik, not the container name, so generated
+  # URLs are reachable from a browser. Mirrors mise's own
+  # RUSTFS_ENDPOINT = "http://{{ env.S3_HOST }}", and defers to it if set.
+  printf 'RUSTFS_ENDPOINT=%s\n'      "${RUSTFS_ENDPOINT:-http://$S3_HOST}"
+  printf 'S3_HOST=%s\n'               "$S3_HOST"
+  printf 'RUSTFS_UI_HOST=%s\n'        "$RUSTFS_UI_HOST"
+  printf 'PODMAN_TRAEFIK_IP=%s\n'     "${PODMAN_TRAEFIK_IP:-10.214.0.2}"
+  # entrypoint-playwright.sh reads TRAEFIK_IP for its socat :80 forward and
+  # falls back to 10.213.0.2 -- the *docker* proxy -- when it is unset. Same
+  # value under the name that script expects.
+  printf 'TRAEFIK_IP=%s\n'           "${PODMAN_TRAEFIK_IP:-10.214.0.2}"
+  # rails@ interpolates this into a --add-host. wt:share overwrites it in
+  # .unit-env/<wt>.share.env with the tailnet name; the default here is a
+  # duplicate of an entry rails already has, because an empty --add-host is a
+  # hard error and Quadlet offers no way to omit an argument conditionally.
+  printf 'TS_HOST_ENTRY=%s:%s\n'     "$WORKTREE_HOST" "${PODMAN_TRAEFIK_IP:-10.214.0.2}"
+  printf '\n'
+  printf 'DB_PORT=%s\n'               "$DB_PORT"
+  printf 'RUBY_DEBUG_PORT=%s\n'       "$RUBY_DEBUG_PORT"
+  printf 'NVIM_PORT=%s\n'             "$NVIM_PORT"
+  printf 'PLAYWRIGHT_HOST_PORT=%s\n'  "$PLAYWRIGHT_HOST_PORT"
+  printf 'APP_PORT=%s\n'             "$APP_PORT"
+  printf 'S3_PORT=%s\n'              "$S3_PORT"
+  printf '\n'
+  # Shared tag keyed by runtime versions, so one image serves every worktree on
+  # the same combination instead of one per project.
+  printf 'RAILS_IMAGE=localhost/%s/rails:ruby%s-node%s\n'      "$PROJECT_PREFIX" "$RUBY_VERSION" "$NODE_VERSION"
+  printf 'NVIM_IMAGE=localhost/%s/nvim:ruby%s-node%s\n'        "$PROJECT_PREFIX" "$RUBY_VERSION" "$NODE_VERSION"
+  printf 'PLAYWRIGHT_IMAGE=localhost/%s/playwright:v%s\n'      "$PROJECT_PREFIX" "$pw"
+  printf 'CLAUDE_IMAGE=localhost/%s/claude:latest\n'           "$PROJECT_PREFIX"
+  printf '\n'
+  # Also consumed by podman-build.sh as build args, so the image tags it
+  # produces cannot drift from the tags the units expect.
+  printf 'RUBY_VERSION=%s\n'         "$RUBY_VERSION"
+  printf 'NODE_VERSION=%s\n'         "$NODE_VERSION"
+  printf 'PLAYWRIGHT_VERSION=%s\n'   "$pw"
+  printf '\n'
+  printf 'GEM_VOLUME=%s\n'            "$GEM_VOLUME"
+  printf 'MAIN_WORKTREE_PATH=%s\n'    "$MAIN_WORKTREE_PATH"
+  printf 'NVIM_CONFIG_MOUNT=%s\n'     "$nvim_config_mount"
+  # Told to the container rather than inferred there. The entrypoint used to
+  # test writability to guess the mode, which is wrong for root (mode bits are
+  # advisory) and fragile in general -- the script that made the decision is the
+  # one that knows.
+  printf 'NVIM_CONFIG_SOURCE=%s\n'    "$nvim_config_source"
+  printf 'SSH_PATH=%s\n'              "$SSH_PATH"
+  # Validated, not just passed through. mise already falls back to /dev/null
+  # when $SSH_AUTH_SOCK is unset, but a *stale* value -- an agent that died, or
+  # a path inherited from another login session -- is worse under podman than it
+  # was under docker: docker created the missing bind source, podman refuses the
+  # whole container with "statfs <path>: no such file or directory". nvim@ would
+  # then fail to start over an ssh agent it does not strictly need.
+  agent_sock="$SSH_AGENT_SOCK"
+  if [[ "$agent_sock" != /dev/null && ! -S "$agent_sock" ]]; then
+    printf 'warn: SSH_AGENT_SOCK=%s is not a socket; falling back to /dev/null\n' "$agent_sock" >&2
+    printf '      (no agent? nvim will fall back to a passphrase prompt)\n' >&2
+    agent_sock=/dev/null
+  fi
+  printf 'SSH_AGENT_SOCK=%s\n'        "$agent_sock"
+  printf '\n'
+  printf 'CPUS_25=%s\n'               "$CPUS_25"
+  printf 'CPUS_50=%s\n'               "$CPUS_50"
+  printf 'CPUS_75=%s\n'               "$CPUS_75"
+  printf '\n'
+  # db@ takes no shared .env (that file sets PGHOST=db and breaks initdb), so
+  # its password comes from here.
+  printf 'POSTGRES_PASSWORD=%s\n'     "$PGPASSWORD"
+  printf 'HEADLESS_SYSTEM_TESTS=%s\n' "${HEADLESS_SYSTEM_TESTS:-0}"
+} > "$OUT"
+
+
+# rails@ loads this after the file above, so wt:share can override DOMAIN and
+# RUSTFS_ENDPOINT without touching generated values. It has to exist even when
+# nothing is shared: podman's --env-file errors on a missing path, and Quadlet's
+# [Container] EnvironmentFile has no `-` optional form the way systemd's does.
+SHARE="$ROOT/.unit-env/$CURRENT_WORKTREE_NAME.share.env"
+[[ -f "$SHARE" ]] || printf '# Written by wt:share. Empty means not shared.\n' > "$SHARE"
+
+printf 'Wrote %s\n' "$OUT"
+printf '  worktree %s (id %s) -> http://%s\n' "$CURRENT_WORKTREE_NAME" "$WORKTREE_ID" "$WORKTREE_HOST"
+printf '  db 127.0.0.1:%s   nvim :%s   playwright :%s   ruby-debug :%s\n' \
+  "$DB_PORT" "$NVIM_PORT" "$PLAYWRIGHT_HOST_PORT" "$RUBY_DEBUG_PORT"

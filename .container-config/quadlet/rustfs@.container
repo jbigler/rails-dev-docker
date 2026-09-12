@@ -1,0 +1,58 @@
+[Unit]
+Description=RustFS S3 storage for worktree %i
+Requires=@@P@@-net-network@%i.service @@P@@-rustfs-init@%i.service
+After=@@P@@-net-network@%i.service @@P@@-rustfs-init@%i.service
+Wants=@@P@@-traefik.service
+After=@@P@@-traefik.service
+
+[Container]
+Image=docker.io/rustfs/rustfs:1.0.0-alpha.83
+ContainerName=@@P@@-%i-rustfs
+Network=@@P@@-%i-dev
+NetworkAlias=rustfs
+Network=@@P@@-proxy.network
+# Loopback only; see rails@ for why wt:share needs a published port.
+PublishPort=127.0.0.1:${S3_PORT}:9000
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
+Environment=RUSTFS_VOLUMES=/data/rustfs{0..3}
+Environment=RUSTFS_ACCESS_KEY=rustfsadmin
+Environment=RUSTFS_SECRET_KEY=rustfsadmin
+Environment=RUSTFS_CONSOLE_ENABLE=true
+Environment=RUSTFS_ADDRESS=0.0.0.0:9000
+Environment=RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+Volume=@@P@@-%i-rustfs-data:/data
+
+Label=traefik.enable=true
+Label=traefik.http.routers.@@P@@-%i-s3.rule=Host(`${S3_HOST}`)
+Label=traefik.http.routers.@@P@@-%i-s3.entrypoints=web
+Label=traefik.http.routers.@@P@@-%i-s3.service=@@P@@-%i-s3
+Label=traefik.http.services.@@P@@-%i-s3.loadbalancer.server.port=9000
+Label=traefik.http.routers.@@P@@-%i-s3-ui.rule=Host(`${RUSTFS_UI_HOST}`)
+Label=traefik.http.routers.@@P@@-%i-s3-ui.entrypoints=web
+Label=traefik.http.routers.@@P@@-%i-s3-ui.service=@@P@@-%i-s3-ui
+Label=traefik.http.services.@@P@@-%i-s3-ui.loadbalancer.server.port=9001
+# RustFS serves the console at /rustfs/console/index.html; a bare / on 9001
+# falls through to the S3 API handler and answers 403 AccessDenied (unsigned
+# request). Redirect the host root to the console.
+Label=traefik.http.routers.@@P@@-%i-s3-ui.middlewares=@@P@@-%i-s3-ui-root
+Label=traefik.http.middlewares.@@P@@-%i-s3-ui-root.redirectregex.regex=^http://([^/]+)/?$$
+Label=traefik.http.middlewares.@@P@@-%i-s3-ui-root.redirectregex.replacement=http://$${1}/rustfs/console/index.html
+
+HealthCmd=curl -f http://localhost:9000/health
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=5
+HealthStartPeriod=15s
+LogDriver=k8s-file
+LogOpt=max-size=20m
+
+[Service]
+# Quadlet turns a [Container] EnvironmentFile= into `podman run --env-file`, which
+# puts the values *inside* the container and leaves the systemd service
+# environment empty -- so every ${VAR} above expanded to nothing. The keys are
+# expanded by systemd from the service environment, so the same file has to be
+# loaded here too. Both lines are needed and neither is redundant: this one
+# resolves the unit's own keys, the [Container] one gives the process its env.
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
+Restart=on-failure
+RestartSec=5

@@ -81,3 +81,37 @@ find_base_worktree_name() {
   echo "No base worktree found in $root" >&2
   return 1
 }
+
+# Regenerate .unit-env/<worktree>.env if it is missing or older than anything it
+# is derived from. That file is a cache: NODE_VERSION, RUBY_VERSION, the
+# Playwright tag and the image tags built from them are all read out of it
+# rather than recomputed, so until now a `.nvmrc` bump on a branch left `build`
+# building the old node tag and `up` starting it, with nothing saying why.
+# mtime, not content: a checkout that changes the file also touches it, and a
+# needless regeneration costs one mise eval.
+# Takes no worktree argument on purpose: units-env.sh regenerates whichever
+# worktree CURRENT_WORKTREE_NAME names, so a name passed in here could only
+# disagree with the file it actually rewrites.
+ensure_unit_env() {
+  local wt="${CURRENT_WORKTREE_NAME:?not set -- run from inside a worktree}"
+  local root out src stale=""
+  root="$(find_project_root)"
+  out="$root/.unit-env/$wt.env"
+
+  if [[ ! -f "$out" ]]; then
+    stale="no env file yet"
+  else
+    for src in "$root/$wt/.nvmrc" "$root/$wt/.ruby-version" \
+               "$root/$wt/Gemfile.lock" "$root/$wt/mise.local.toml" \
+               "$root/$wt/config/database.yml" "$root/mise.local.toml" \
+               "$root/.mise/local.toml.template" "$root/.scripts/units-env.sh"; do
+      [[ -f "$src" && "$src" -nt "$out" ]] || continue
+      stale="${src#$root/} changed"
+      break
+    done
+  fi
+  [[ -n "$stale" ]] || return 0
+
+  printf '%s; regenerating %s...\n' "$stale" "${out#$root/}" >&2
+  "$root/.scripts/units-env.sh" >&2
+}

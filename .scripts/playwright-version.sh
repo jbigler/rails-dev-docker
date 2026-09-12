@@ -4,7 +4,7 @@
 # playwright-ruby-client tracks upstream Playwright releases, so its locked
 # version drives the browser-server image tag and the npm playwright-core
 # version (see Dockerfile.playwright). Best-effort: prints nothing (exit 0)
-# when the lock or the gem is missing, so compose can fall back to its
+# when the lock or the gem is missing, so units-env.sh can fall back to its
 # default tag.
 #
 # Usage: playwright-version.sh [path-to-Gemfile.lock]   (default: Gemfile.lock)

@@ -1,0 +1,31 @@
+[Unit]
+Description=Redis for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+
+[Container]
+Image=docker.io/library/redis:8-alpine
+ContainerName=@@P@@-%i-redis
+Network=@@P@@-%i-dev
+NetworkAlias=redis
+# TCP on the worktree network only, never published to the host.
+Exec=redis-server --loglevel warning --save '' --appendonly no
+# Shell form. Quadlet passes this to --health-cmd as written, escaping the
+# space as \x20 (see the generated ExecStart); the exec-array form compose used
+# has no equivalent here.
+HealthCmd=redis-cli ping
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=5
+LogDriver=k8s-file
+LogOpt=max-size=20m
+
+[Service]
+Restart=on-failure
+RestartSec=5
+
+# No [Install]: worktree services never autostart. With linger off, a login
+# session starts nothing until you start a worktree.

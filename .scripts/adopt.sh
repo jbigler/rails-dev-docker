@@ -7,7 +7,7 @@ set -euo pipefail
 # location so the old path keeps working everywhere.
 #
 # Usage: .scripts/adopt.sh [-p <prefix>] [-b <base-name>] <path-to-existing-checkout>
-#   -p <prefix>     Docker volume/network prefix (default: checkout folder name)
+#   -p <prefix>     podman volume/network prefix (default: checkout folder name)
 #   -b <base-name>  base worktree directory name (default: checkout folder name;
 #                   set to your default branch, e.g. -b master, to match the
 #                   tool's clone-time convention)
@@ -44,13 +44,30 @@ fi
 # --- Root mise.local.toml (git-ignored) ---
 # DEV_DB_NAME is intentionally omitted: each worktree's mise.local.toml derives
 # it from config/database.yml (see .mise/local.toml.template).
-cat > "$root/mise.local.toml" <<EOF
+#
+# Never overwrite an existing one. PROJECT_PREFIX names every container,
+# volume, network and generated systemd unit, so silently replacing it with the
+# checkout's folder name orphans everything already created under the old name
+# -- and the resulting failure ("Unit <folder>-traefik.service not found")
+# points at systemd rather than at this file. init-repo.sh and
+# local-config.sh both leave it alone; this now matches.
+if [ -f "$root/mise.local.toml" ]; then
+  existing="$(sed -n 's/^PROJECT_PREFIX *= *"\(.*\)"/\1/p' "$root/mise.local.toml" | head -1)"
+  echo "Keeping existing $root/mise.local.toml (PROJECT_PREFIX=${existing:-unset})"
+  if [ -n "$existing" ] && [ "$existing" != "$prefix" ]; then
+    echo "  note: that differs from the prefix this run would have used ('$prefix')."
+    echo "        The existing value wins. Pass -p '$prefix' and delete the file"
+    echo "        first if you really want to rename the workspace."
+  fi
+else
+  cat > "$root/mise.local.toml" <<EOF
 [env]
 PROJECT_PREFIX = "$prefix"
 GEM_VOLUME_BASE = "${prefix}_shared_gems"
 NVIM_CONFIG_DIR = "$HOME/.config/nvim"
 EOF
-echo "Wrote $root/mise.local.toml"
+  echo "Wrote $root/mise.local.toml (PROJECT_PREFIX=$prefix)"
+fi
 
 # --- Locally ignore the generated per-worktree mise.local.toml in the repo ---
 excl="$dest/.git/info/exclude"

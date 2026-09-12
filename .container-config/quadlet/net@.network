@@ -1,0 +1,11 @@
+[Unit]
+Description=Isolated dev network for worktree %i
+
+[Network]
+# One network per worktree. The db/redis/rustfs aliases below are what
+# PGHOST=db and REDIS_URL=redis://redis:6379 resolve against, so a single
+# shared network would make those aliases ambiguous across worktrees -- this
+# is what COMPOSE_PROJECT_NAME was buying under compose.
+NetworkName=@@P@@-%i-dev
+# Fix for access when a WireGuard VPN is up on the host.
+Options=mtu=1400

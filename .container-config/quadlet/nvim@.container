@@ -1,0 +1,72 @@
+[Unit]
+Description=Neovim server for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+
+[Container]
+Image=${NVIM_IMAGE}
+ContainerName=@@P@@-%i-nvim
+Network=@@P@@-%i-dev
+NetworkAlias=nvim
+UserNS=keep-id:uid=1000,gid=1000
+User=1000:1000
+
+EnvironmentFile=@@ROOT@@/.container-config/.env
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
+Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock
+Environment=RUSTFS_ENDPOINT=http://rustfs:9000
+
+# Loopback only -- nvim RPC allows arbitrary command execution.
+PublishPort=127.0.0.1:${NVIM_PORT}:7777
+
+Volume=@@ROOT@@/.home/%i:/home/appuser:z
+Volume=@@ROOT@@/%i:/app:z
+Volume=${MAIN_WORKTREE_PATH}/.git:${MAIN_WORKTREE_PATH}/.git:z
+# The whole mount spec is one variable, because the two cases differ in source
+# AND in flags and Quadlet has no conditional syntax. units-env.sh picks:
+#   unset NVIM_CONFIG_DIR -> <prefix>_nvim_config:...:U  a writable named volume
+#                            shared by every worktree's nvim, so you configure
+#                            nvim from inside the container and it persists
+#   set   NVIM_CONFIG_DIR -> /host/path:...:ro,z          your host config, read-only
+# Quadlet passes an unresolved Volume= through to `podman run -v` verbatim
+# (verified against the generator), and systemd expands it at start.
+Volume=${NVIM_CONFIG_MOUNT}
+Volume=${SSH_PATH}:/home/appuser/.ssh:ro,z
+# Host ssh-agent. Sockets cross the keep-id boundary correctly -- verified
+# with both a named volume and a host bind mount -- so the already-unlocked
+# host key is reused instead of prompting per container.
+Volume=${SSH_AGENT_SOCK}:/tmp/ssh-agent.sock:ro,z
+Volume=@@ROOT@@/.container-config/entrypoint-nvim.sh:/usr/local/bin/entrypoint-nvim.sh:ro,z
+Volume=%h/.config/git/ignore:/home/appuser/.config/git/ignore:ro,z
+# kitty remote control for vim-kitty-navigator: the plugin shells out to
+# `kitten @` from the nvim server in here. The host's kitten links only libc so
+# it runs as-is. The socket *directory* is mounted, not the socket (whose name
+# carries the kitty PID), so a kitty restart needs no container recreate, and
+# rw because connect(2) wants write on the socket.
+Volume=/usr/bin/kitten:/usr/bin/kitten:ro
+Volume=%h/.local/state/kitty:/kitty-sock:z
+Volume=${GEM_VOLUME}:/usr/local/bundle
+Volume=@@P@@-%i-node-modules:/app/node_modules:U
+Volume=@@P@@_npm_cache:/home/appuser/.npm:U
+Volume=@@P@@_npm_global:/home/appuser/.npm-global:U
+Volume=@@P@@_nvim_share:/home/appuser/.local/share/nvim:U
+
+PodmanArgs=--cpus=${CPUS_25} --tty --interactive
+LogDriver=k8s-file
+LogOpt=max-size=20m
+Entrypoint=entrypoint-nvim.sh
+Exec=/usr/local/bin/nvim --headless --listen 0.0.0.0:7777
+
+[Service]
+# Quadlet turns a [Container] EnvironmentFile= into `podman run --env-file`, which
+# puts the values *inside* the container and leaves the systemd service
+# environment empty -- so every ${VAR} above expanded to nothing. The keys are
+# expanded by systemd from the service environment, so the same file has to be
+# loaded here too. Both lines are needed and neither is redundant: this one
+# resolves the unit's own keys, the [Container] one gives the process its env.
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
+Restart=on-failure
+RestartSec=5

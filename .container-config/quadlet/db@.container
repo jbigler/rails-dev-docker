@@ -1,0 +1,88 @@
+[Unit]
+Description=PostgreSQL for worktree %i
+# Quadlet names a .network unit <name>-network.service, so net@.network
+# becomes @@P@@-net-network@%i.service -- not @@P@@-net@%i.service. A plain
+# Network= name creates no implicit dependency, so this must be explicit.
+Requires=@@P@@-net-network@%i.service
+After=@@P@@-net-network@%i.service
+
+[Container]
+Image=docker.io/library/postgres:16
+ContainerName=@@P@@-%i-db
+Network=@@P@@-%i-dev
+NetworkAlias=db
+
+# Deliberately NOT the shared .container-config/.env: that file is written for the
+# app containers and sets PGHOST=db, which breaks the initdb.d scripts (during
+# first-start init the server listens on its local socket only, so createdb and
+# psql get "Connection refused"). Everything db needs is explicit.
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
+# Match the app containers so timestamps agree across the stack.
+Environment=TZ=Asia/Bangkok
+Environment=PGTZ=Asia/Bangkok
+
+# Parallel query DSM segments come out of /dev/shm. The parallel settings below
+# make parallel plans routine, and the 64mb default is too small -- exhaustion
+# surfaces as "could not resize shared memory segment".
+ShmSize=256mb
+
+# Per-worktree host port so host-side bin/rails and psql reach this worktree's
+# database over TCP. ${DB_PORT} comes from the EnvironmentFile above and is
+# expanded by systemd, not by Quadlet.
+PublishPort=127.0.0.1:${DB_PORT}:5432
+
+Volume=@@P@@-%i-db-data:/var/lib/postgresql/data
+Volume=@@ROOT@@/.container-config/initdb/restore-dump.sh:/docker-entrypoint-initdb.d/restore-dump.sh:ro,z
+Volume=@@ROOT@@/.container-config/db-dumps:/db-dumps:ro,z
+
+# No UserNS=keep-id: this image runs as its own postgres user against a
+# podman-managed named volume, where the default rootless mapping is correct.
+# keep-id would break the data directory's ownership.
+
+Exec=postgres \
+  -c shared_preload_libraries=pg_stat_statements \
+  -c pg_stat_statements.track=all \
+  -c max_connections=200 \
+  -c max_locks_per_transaction=256 \
+  -c shared_buffers=256MB \
+  -c temp_buffers=128MB \
+  -c work_mem=64MB \
+  -c maintenance_work_mem=256MB \
+  -c fsync=off \
+  -c synchronous_commit=off \
+  -c full_page_writes=off \
+  -c max_wal_senders=0 \
+  -c wal_level=minimal \
+  -c wal_compression=off \
+  -c checkpoint_timeout=1h \
+  -c max_wal_size=4GB \
+  -c checkpoint_completion_target=0.9 \
+  -c autovacuum=off \
+  -c random_page_cost=1.0 \
+  -c seq_page_cost=0.1 \
+  -c log_statement=none \
+  -c log_checkpoints=off \
+  -c log_autovacuum_min_duration=-1 \
+  -c log_temp_files=-1 \
+  -c max_parallel_workers_per_gather=4 \
+  -c parallel_setup_cost=0 \
+  -c parallel_tuple_cost=0
+
+HealthCmd=pg_isready -U postgres
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=5
+HealthStartPeriod=30s
+LogDriver=k8s-file
+LogOpt=max-size=20m
+
+[Service]
+# Quadlet turns a [Container] EnvironmentFile= into `podman run --env-file`, which
+# puts the values *inside* the container and leaves the systemd service
+# environment empty -- so every ${VAR} above expanded to nothing. The keys are
+# expanded by systemd from the service environment, so the same file has to be
+# loaded here too. Both lines are needed and neither is redundant: this one
+# resolves the unit's own keys, the [Container] one gives the process its env.
+EnvironmentFile=@@ROOT@@/.unit-env/%i.env
+Restart=on-failure
+RestartSec=5

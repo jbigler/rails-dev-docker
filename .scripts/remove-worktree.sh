@@ -75,73 +75,82 @@ if [ -n "$dirty" ]; then
   fi
 fi
 
-# Determine compose project name (mirrors mise.local.toml.template).
-# No fallback: with a wrong prefix the docker teardown below silently
-# targets a nonexistent project and leaves the real stack running.
+# No fallback on the prefix: with the wrong one the teardown below silently
+# targets units that do not exist and leaves the real stack running.
 if [ -z "${PROJECT_PREFIX:-}" ]; then
   echo "Error: PROJECT_PREFIX is unset — run via 'mise run wt:rm' so the mise env is loaded" >&2
   exit 1
 fi
-project_name="${PROJECT_PREFIX}-${clean_name}"
+P="$PROJECT_PREFIX"
+W="$clean_name"
 
-echo "Stopping compose stack: ${project_name}..."
-docker compose -p "$project_name" down -v --rmi local --remove-orphans --timeout 30 || true
+# The containers belong to systemd, not to us. Stopping them with `podman stop`
+# would leave the units active and Restart=on-failure would bring them straight
+# back, so the units go first and the container sweep below is only a fallback
+# for anything left behind (a container started by hand, or one whose unit was
+# already removed).
+echo "Stopping the units for worktree ${W}..."
+for svc in rails claude nvim playwright rustfs rustfs-init redis db net-network; do
+  systemctl --user stop "${P}-${svc}@${W}.service" 2>/dev/null || true
+done
 
-# Force-remove any lingering containers
-lingering=$(docker ps -aq --filter "label=com.docker.compose.project=$project_name")
+# Explicit names, never a prefix filter. `--filter name=` is an unanchored
+# regex, so "^${P}-${W}-" also matches a *different* worktree whose slug starts
+# with this one: removing "api" would have swept "api-v2"'s containers and
+# volumes with it. Enumerating the service names the templates actually set
+# cannot do that. Verified against a list containing api-v2 before and after.
+SERVICES="rails claude nvim playwright rustfs rustfs-init redis db"
+lingering=""
+for svc in $SERVICES; do
+  ct="${P}-${W}-${svc}"
+  podman container exists "$ct" 2>/dev/null && lingering="$lingering $ct"
+done
 if [ -n "$lingering" ]; then
   echo "Force removing lingering containers..."
-  docker rm -f $lingering
+  # shellcheck disable=SC2086
+  podman rm -f $lingering || true
 fi
 
-# Remove any orphaned volumes belonging to this project
-orphan_volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=$project_name")
+# Only this worktree's three volumes. The shared ones -- gems, npm caches, nvim
+# share, playwright browsers, claude plugins -- are underscore-separated
+# (${P}_npm_cache) and are not in this list; removing them would force every
+# other worktree to a cold start.
+orphan_volumes=""
+for v in "${P}-${W}-db-data" "${P}-${W}-rustfs-data" "${P}-${W}-node-modules"; do
+  podman volume exists "$v" 2>/dev/null && orphan_volumes="$orphan_volumes $v"
+done
 if [ -n "$orphan_volumes" ]; then
-  echo "Removing orphaned volumes..."
-  docker volume rm $orphan_volumes || true
+  echo "Removing this worktree's volumes (db, rustfs, node_modules)..."
+  # shellcheck disable=SC2086
+  podman volume rm $orphan_volumes || true
 fi
 
-# Remove any orphaned networks belonging to this project
-orphan_networks=$(docker network ls -q --filter "label=com.docker.compose.project=$project_name")
-if [ -n "$orphan_networks" ]; then
-  echo "Removing orphaned networks..."
-  docker network rm $orphan_networks || true
+# The per-worktree network, named exactly by net@.network's NetworkName -- an
+# exact name, so the same prefix-collision problem does not arise. The shared
+# ${P}_proxy network is underscore-separated and is not this name.
+if podman network exists "${P}-${W}-dev" 2>/dev/null; then
+  echo "Removing network ${P}-${W}-dev..."
+  podman network rm "${P}-${W}-dev" || true
 fi
 
-# Remove any orphaned images belonging to this project. The compose project
-# label alone is NOT sufficient here: compose stamps it on the shared base
-# images too (filial/rails, filial/nvim, filial/playwright, filial/claude),
-# using whichever project built them last — so filtering on the label would
-# delete the bases out from under every other worktree. An image is only ours
-# when its project + service labels reconstruct its own repository name, which
-# is compose's default naming for images it builds:
-#   filial-master-app  = filial-master + "-" + app   → ours
-#   filial/rails:...   labelled filial-master        → not ours, skipped
-# The service label has to come from `docker image inspect`: `docker images
-# --format` exposes no .Labels field and errors on it.
-orphan_image_ids=$(docker images -q --filter "label=com.docker.compose.project=$project_name" | sort -u)
-orphan_images=""
-if [ -n "$orphan_image_ids" ]; then
-  orphan_images=$(docker image inspect $orphan_image_ids \
-    --format '{{range .RepoTags}}{{.}} {{end}}	{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null \
-    | awk -F'\t' -v p="$project_name" '
-        $2 == "" { next }
-        {
-          n = split($1, tags, " ")
-          for (i = 1; i <= n; i++) {
-            if (tags[i] == "") continue
-            repo = tags[i]; sub(/:[^:]*$/, "", repo)
-            if (repo == p "-" $2) print tags[i]
-          }
-        }')
-fi
-if [ -n "$orphan_images" ]; then
-  echo "Removing orphaned images..."
-  docker rmi $orphan_images || true
-fi
+# Deliberately NO image removal, which is a real difference from the compose
+# teardown this replaces. That one ran `--rmi local` plus a label sweep, because
+# compose built one image per project (filial-master-app) and those were dead
+# once the project was gone.
+#
+# Under podman the tags are keyed by the runtime versions instead of the
+# worktree -- localhost/<prefix>/rails:ruby4.0.3-node24.19.0 -- so one image
+# serves every worktree on the same ruby/node combination. Removing images here
+# would take the rails image out from under every other worktree and force a
+# full rebuild. Sweeping genuinely unreferenced images is `mise run clean`'s
+# job, where it can see all the worktrees at once.
+
+# The unit env file lives in the workspace root, not the worktree, so removing
+# the worktree directory does not take it with it.
+rm -f "${root}/.unit-env/${clean_name}.env" "${root}/.unit-env/${clean_name}.share.env"
 
 # Drop the dashboard's claude status file for this worktree
-rm -f "${root}/.docker-config/status/${clean_name}.json"
+rm -f "${root}/.container-config/status/${clean_name}.json"
 
 # Drop this worktree's home. Its ~/.claude holds a live OAuth refresh token
 # valid for weeks, so an orphaned home is a stale credential, not just

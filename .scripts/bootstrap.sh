@@ -6,13 +6,13 @@ usage() {
 Usage: bootstrap.sh [-p <project-prefix>] <user/repo | git-url>
 
   -p  project prefix used for the workspace folder name, PROJECT_PREFIX
-      in mise.local.toml, and docker volume/network names
+      in mise.local.toml, and podman volume/network names
       (default: <repo> basename)
 
 Bootstraps a new rails-dev-docker workspace:
   1. Clones rails-dev-docker into ./<prefix>/
   2. Writes ./<prefix>/mise.local.toml with PROJECT_PREFIX et al.
-  3. Creates the external docker volumes
+  3. Creates the shared podman volumes
   4. Invokes .scripts/init-repo.sh to clone the rails project into
      a default-branch-named subfolder
 EOF
@@ -20,7 +20,7 @@ EOF
 }
 
 missing=""
-command -v docker >/dev/null 2>&1 || missing="${missing}\n  - docker:    https://docs.docker.com/engine/install/"
+command -v podman >/dev/null 2>&1 || missing="${missing}\n  - podman:    https://podman.io/docs/installation (>= 5)"
 command -v mise   >/dev/null 2>&1 || missing="${missing}\n  - mise:      https://mise.jdx.dev/getting-started.html  (or: curl https://mise.run | sh)"
 command -v git    >/dev/null 2>&1 || missing="${missing}\n  - git:       install via your system package manager"
 if [ -n "$missing" ]; then

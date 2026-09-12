@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Seed a worktree's container home from the template, idempotently. Called by
-# the mise `up` task, compose-run fallback tasks and create-worktree.sh —
-# anything that may bind-mount .home/<slug> must run this first, or the
-# Docker daemon creates the bind source (and volume mount points) as root.
+# `up`, `exec`'s transient-container path, podman-claude.sh and
+# create-worktree.sh — anything that may bind-mount .home/<slug> must run this
+# first. Under docker the cost of skipping it was the daemon creating the bind
+# source as root; under podman it is worse, because podman does not create a
+# missing bind source at all and fails the unit with
+# "statfs <path>: no such file or directory" (exit 125).
 #
 # Usage: seed-home.sh <worktree-name>
 set -euo pipefail
@@ -12,7 +15,7 @@ source "$(dirname "$0")/lib.sh"
 name="${1:?usage: seed-home.sh <worktree-name>}"
 root=$(find_project_root)
 home_dir="$root/.home/$name"
-tmpl="$root/.docker-config/home-template"
+tmpl="$root/.container-config/home-template"
 
 if [ ! -d "$home_dir" ]; then
   mkdir -p "$home_dir"
@@ -21,9 +24,10 @@ if [ ! -d "$home_dir" ]; then
   fi
 fi
 
-# Mount-point dirs must exist appuser-owned even when the template is empty
-# (fresh clone): a missing bind/volume mount point gets created by the Docker
-# daemon as root, and the containers then cannot write their own home.
+# Mount-point dirs must exist even when the template is empty (fresh clone).
+# Rootless podman creates what it must as you rather than as root, so the old
+# ownership hazard is gone, but a missing *bind* source is still fatal and the
+# volumes mounted inside this home need their mount points to exist.
 mkdir -p \
   "$home_dir/.ssh" \
   "$home_dir/.config/nvim" \
@@ -37,7 +41,11 @@ mkdir -p \
   "$home_dir/.claude/plugins/marketplaces" \
   "$home_dir/.claude/projects/-app-$name"
 
-# ~/.config/git/ignore is a FILE bind target — if it does not exist when a
-# container starts, the Docker daemon creates it root-owned in the home,
-# which later breaks the user-level `rm -rf .home/<slug>` in wt:rm.
+# ~/.config/git/ignore is a FILE bind target: nvim@ mounts the host's copy at
+# this path, which lands inside the bind-mounted home. Under docker the daemon
+# created the missing file root-owned, which then broke the user-level
+# `rm -rf .home/<slug>` in wt:rm. Rootless podman would create it as you, so
+# that specific hazard is gone; creating it here keeps the home's contents
+# predictable rather than depending on what the runtime does with a missing
+# mount point.
 [ -e "$home_dir/.config/git/ignore" ] || touch "$home_dir/.config/git/ignore"
